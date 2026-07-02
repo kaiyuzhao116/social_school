@@ -1,0 +1,3 @@
+ALTER TABLE conversation_member
+  ADD COLUMN last_read_at DATETIME NULL,
+  ADD COLUMN joined_at    DATETIME NULL DEFAULT CURRENT_TIMESTAMP;

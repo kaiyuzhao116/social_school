@@ -1,0 +1,40 @@
+# ===== Java / Maven =====
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+*.rar
+
+# Maven
+.mvn/wrapper/maven-wrapper.jar
+
+# ===== Spring Boot =====
+campusconnect-api/src/main/resources/application-prod.yml
+campusconnect-api/uploads/
+
+# ===== Node / Vue / Vite =====
+campusconnect-web/node_modules/
+campusconnect-web/dist/
+campusconnect-web/.env.local
+campusconnect-web/.env.*.local
+
+# ===== IDE Files =====
+.idea/
+*.iml
+.vscode/settings.json
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ===== Logs =====
+*.log
+logs/
+
+# ===== OS =====
+.DS_Store
+Desktop.ini
