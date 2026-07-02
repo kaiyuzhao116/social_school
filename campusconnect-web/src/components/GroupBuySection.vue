@@ -46,7 +46,9 @@
                     ? 'bg-green-100 text-green-600'
                     : item.status === 'GROUPING'
                       ? 'bg-emerald-100 text-emerald-600'
-                      : 'bg-gray-100 text-gray-500'
+                      : item.status === 'CANCELLED'
+                        ? 'bg-orange-100 text-orange-600'
+                        : 'bg-gray-100 text-gray-500'
                 ]"
               >
                 {{ statusText(item.status) }}
@@ -68,16 +70,25 @@
                 截止：{{ formatTime(item.deadline) }}
               </span>
 
-              <!-- 未参加：显示参加 -->
+              <!-- 发起人：取消拼团 -->
               <button
-                  v-if="item.status === 'GROUPING' && !hasJoined(item.id)"
+                  v-if="item.status === 'GROUPING' && isCreator(item.id)"
+                  @click="handleCancel(item.id)"
+                  class="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600 transition"
+              >
+                取消拼团
+              </button>
+
+              <!-- 普通用户未参加：参加拼团 -->
+              <button
+                  v-else-if="item.status === 'GROUPING' && !hasJoined(item.id)"
                   @click="handleJoin(item.id)"
                   class="px-3 py-1.5 rounded-lg bg-indigo-500 text-white text-xs font-bold hover:bg-indigo-600 transition"
               >
                 参加拼团
               </button>
 
-              <!-- 已参加：显示退出 -->
+              <!-- 普通用户已参加：退出拼团 -->
               <button
                   v-else-if="item.status === 'GROUPING' && hasJoined(item.id)"
                   @click="handleQuit(item.id)"
@@ -86,7 +97,7 @@
                 退出拼团
               </button>
 
-              <!-- 已成团/已取消/已过期 -->
+              <!-- 已成团 / 已取消 / 已过期 -->
               <button
                   v-else
                   disabled
@@ -218,6 +229,7 @@ import request from '../api/request'
 
 const groupBuys = ref([])
 const joinedIds = ref([])
+const createdIds = ref([])
 
 const isModalOpen = ref(false)
 const isSaving = ref(false)
@@ -247,18 +259,25 @@ const formatTime = (value) => {
 
 const formatDateTime = (value) => {
   if (!value) return null
+
   if (value.includes('T')) {
     if (value.length === 16) return value + ':00'
     return value
   }
+
   if (value.length === 16) {
     return value.replace(' ', 'T') + ':00'
   }
+
   return value.replace(' ', 'T')
 }
 
 const hasJoined = (id) => {
   return joinedIds.value.includes(id)
+}
+
+const isCreator = (id) => {
+  return createdIds.value.includes(id)
 }
 
 const loadGroupBuys = async () => {
@@ -281,9 +300,20 @@ const loadMyJoined = async () => {
   }
 }
 
+const loadMyCreated = async () => {
+  try {
+    const res = await request.get('/group-buys/my-created')
+    createdIds.value = res.data || []
+  } catch (e) {
+    console.error('加载我发起的拼团失败:', e)
+    createdIds.value = []
+  }
+}
+
 const refreshGroupBuys = async () => {
   await loadGroupBuys()
   await loadMyJoined()
+  await loadMyCreated()
 }
 
 const openCreateModal = () => {
@@ -354,6 +384,21 @@ const handleQuit = async (id) => {
   } catch (e) {
     console.error('退出拼团失败:', e)
     alert('退出失败，发起人不能退出，只能取消拼团')
+  }
+}
+
+const handleCancel = async (id) => {
+  if (!confirm('确定要取消这个拼团吗？')) {
+    return
+  }
+
+  try {
+    await request.post(`/group-buys/${id}/cancel`)
+    alert('拼团已取消')
+    await refreshGroupBuys()
+  } catch (e) {
+    console.error('取消拼团失败:', e)
+    alert('取消失败，只有发起人可以取消拼团')
   }
 }
 

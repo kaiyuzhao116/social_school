@@ -19,7 +19,22 @@ import java.util.stream.Collectors;
 public class GroupBuyController {
     private final GroupBuyMemberService groupBuyMemberService;
     private final GroupBuyService groupBuyService;
+    /**
+     * 当前用户发起的拼团ID列表
+     */
+    @GetMapping("/my-created")
+    public Result<?> getMyCreatedGroupBuys(@AuthenticationPrincipal UserPrincipal principal) {
+        Long userId = getCurrentUserId(principal);
 
+        List<Long> ids = groupBuyService.lambdaQuery()
+                .eq(GroupBuy::getInitiatorId, userId)
+                .list()
+                .stream()
+                .map(GroupBuy::getId)
+                .collect(Collectors.toList());
+
+        return Result.success(ids);
+    }
     /**
      * 前台首页拼团列表
      */
