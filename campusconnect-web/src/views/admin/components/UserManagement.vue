@@ -211,11 +211,40 @@ const handleEdit = (user) => {
   editForm.value = { ...user }
 }
 
+const roleToBackend = (role) => {
+  if (role === UserRole.ADMIN || role === '管理员') return 'ADMIN'
+  if (role === UserRole.MODERATOR || role === '协管员') return 'MODERATOR'
+  return 'USER'
+}
+
+const statusToBackend = (status) => {
+  return status === '封禁' ? 'BANNED' : 'NORMAL'
+}
+
 const handleSave = async () => {
   if (editingId.value) {
-    const updatedUser = { ...users.value.find(u => u.id === editingId.value), ...editForm.value }
-    await dataService.updateUser(updatedUser)
-    users.value = users.value.map(u => u.id === editingId.value ? updatedUser : u)
+    const oldUser = users.value.find(u => u.id === editingId.value)
+
+    const payload = {
+      id: editingId.value,
+      nickname: editForm.value.name,
+      email: editForm.value.email,
+      avatar: editForm.value.avatar,
+      role: roleToBackend(editForm.value.role),
+      status: statusToBackend(editForm.value.status)
+    }
+
+    await dataService.updateUser(payload)
+
+    const updatedUser = {
+      ...oldUser,
+      ...editForm.value
+    }
+//sadas
+    users.value = users.value.map(u =>
+        u.id === editingId.value ? updatedUser : u
+    )
+
     editingId.value = null
   }
 }
