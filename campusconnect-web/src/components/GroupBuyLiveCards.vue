@@ -98,6 +98,7 @@ const liveCards = ref([])
 let ws = null
 
 const iconText = (type) => {
+  if (type === 'GROUP_BUY_CREATED') return '📢'
   if (type === 'GROUP_BUY_SUCCESS') return '🎉'
   if (type === 'GROUP_BUY_JOINED') return '👥'
   if (type === 'GROUP_BUY_EXPIRED') return '⏰'
@@ -105,6 +106,7 @@ const iconText = (type) => {
 }
 
 const titleText = (card) => {
+  if (card.type === 'GROUP_BUY_CREATED') return '新拼团发布'
   if (card.type === 'GROUP_BUY_SUCCESS') return '拼团已成团'
   if (card.type === 'GROUP_BUY_JOINED') return '有人加入拼团'
   if (card.type === 'GROUP_BUY_EXPIRED') return '拼团已过期'
@@ -133,6 +135,23 @@ const addCard = (data) => {
 
   if (liveCards.value.length > 4) {
     liveCards.value.pop()
+  }
+
+  /**
+   * 通知学生拼团列表刷新
+   *
+   * 右下角卡片负责接收 WebSocket 消息，
+   * 学生拼团列表负责重新请求 /group-buys/overview。
+   */
+  if (
+      data.type === 'GROUP_BUY_CREATED' ||
+      data.type === 'GROUP_BUY_JOINED' ||
+      data.type === 'GROUP_BUY_SUCCESS' ||
+      data.type === 'GROUP_BUY_EXPIRED'
+  ) {
+    window.dispatchEvent(new CustomEvent('group-buy-realtime-update', {
+      detail: data
+    }))
   }
 
   setTimeout(() => {

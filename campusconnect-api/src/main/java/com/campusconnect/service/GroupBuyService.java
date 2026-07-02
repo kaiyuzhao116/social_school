@@ -140,57 +140,7 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
 
         return overview;
     }
-    /**
-     * 发起拼团
-     */
-    @Transactional
-    public GroupBuy createGroupBuy(GroupBuy groupBuy, Long userId) {
-        groupBuy.setInitiatorId(userId);
-        groupBuy.setCurrentCount(1);
-        groupBuy.setStatus("GROUPING");
 
-        if (groupBuy.getTargetCount() == null || groupBuy.getTargetCount() < 2) {
-            groupBuy.setTargetCount(2);
-        }
-
-        if (groupBuy.getCategory() == null || groupBuy.getCategory().isBlank()) {
-            groupBuy.setCategory("生活服务");
-        }
-
-        if (groupBuy.getCoverImage() == null || groupBuy.getCoverImage().isBlank()) {
-            groupBuy.setCoverImage("https://picsum.photos/400/240?random=" + System.currentTimeMillis());
-        }
-
-        save(groupBuy);
-         // 拼团创建成功后，注册一条 RabbitMQ 延迟过期检查消息
-        // 使用 afterCommit，避免数据库事务回滚但消息已经发出去
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    groupBuyExpireProducer.sendExpireCheckMessage(
-                            groupBuy.getId(),
-                            groupBuy.getTitle(),
-                            groupBuy.getDeadline()
-                    );
-                }
-            });
-        } else {
-            groupBuyExpireProducer.sendExpireCheckMessage(
-                    groupBuy.getId(),
-                    groupBuy.getTitle(),
-                    groupBuy.getDeadline()
-            );
-        }
-        GroupBuyMember owner = new GroupBuyMember();
-        owner.setGroupBuyId(groupBuy.getId());
-        owner.setUserId(userId);
-        owner.setRole("OWNER");
-        owner.setJoinedAt(LocalDateTime.now());
-        groupBuyMemberService.save(owner);
-
-        return groupBuy;
-    }
 
     /**
      * 参加拼团
@@ -268,6 +218,53 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
                 groupBuyLivePushService.pushJoined(groupBuy);
             });
         }
+    }
+    /**
+     * 发起拼团
+     */
+    @Transactional
+    public GroupBuy createGroupBuy(GroupBuy groupBuy, Long userId) {
+        groupBuy.setInitiatorId(userId);
+        groupBuy.setCurrentCount(1);
+        groupBuy.setStatus("GROUPING");
+
+        if (groupBuy.getTargetCount() == null || groupBuy.getTargetCount() < 2) {
+            groupBuy.setTargetCount(2);
+        }
+
+        if (groupBuy.getCategory() == null || groupBuy.getCategory().isBlank()) {
+            groupBuy.setCategory("生活服务");
+        }
+
+        if (groupBuy.getCoverImage() == null || groupBuy.getCoverImage().isBlank()) {
+            groupBuy.setCoverImage("https://picsum.photos/400/240?random=" + System.currentTimeMillis());
+        }
+
+        // 1. 保存拼团主表
+        save(groupBuy);
+
+        // 2. 保存发起人为 OWNER
+        GroupBuyMember owner = new GroupBuyMember();
+        owner.setGroupBuyId(groupBuy.getId());
+        owner.setUserId(userId);
+        owner.setRole("OWNER");
+        owner.setJoinedAt(LocalDateTime.now());
+        groupBuyMemberService.save(owner);
+
+        // 3. 事务提交成功后，再发送延迟过期检查消息 + WebSocket 实时卡片
+        runAfterCommit(() -> {
+            // RabbitMQ TTL + DLX 过期检查消息
+            groupBuyExpireProducer.sendExpireCheckMessage(
+                    groupBuy.getId(),
+                    groupBuy.getTitle(),
+                    groupBuy.getDeadline()
+            );
+
+            // WebSocket 实时推送：新拼团发布
+            groupBuyLivePushService.pushCreated(groupBuy);
+        });
+
+        return groupBuy;
     }
     /**
      * 事务提交后执行任务

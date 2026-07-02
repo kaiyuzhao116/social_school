@@ -16,6 +16,25 @@ public class GroupBuyLivePushService {
 
     private final GroupBuyLiveWebSocketHandler groupBuyLiveWebSocketHandler;
     private final ObjectMapper objectMapper;
+    /**
+     * 推送：有人发起拼团
+     */
+    public void pushCreated(GroupBuy groupBuy) {
+        if (groupBuy == null) {
+            return;
+        }
+
+        String message = "📢 新拼团发布：《" + groupBuy.getTitle()
+                + "》，目标人数 "
+                + groupBuy.getTargetCount()
+                + " 人，快来一起参加吧";
+
+        sendGroupBuyMessage(
+                "GROUP_BUY_CREATED",
+                groupBuy,
+                message
+        );
+    }
 
     /**
      * 推送：有人加入拼团

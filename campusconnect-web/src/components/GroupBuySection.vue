@@ -318,11 +318,12 @@
         </div>
       </div>
     </div>
+
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import request from '../api/request'
 
 const groupBuys = ref([])
@@ -343,6 +344,8 @@ const isMembersModalOpen = ref(false)
 const isMembersLoading = ref(false)
 const members = ref([])
 const currentGroupBuyTitle = ref('')
+
+let refreshTimer = null
 
 const form = ref({
   title: '',
@@ -421,6 +424,24 @@ const refreshGroupBuys = async () => {
       cancelled: 0
     }
   }
+}
+
+/**
+ * 接收右下角 WebSocket 实时卡片组件发出的刷新事件。
+ * 收到 GROUP_BUY_JOINED / SUCCESS / EXPIRED 后，自动刷新拼团列表。
+ */
+const handleRealtimeUpdate = (event) => {
+  const data = event.detail || {}
+
+  console.log('收到拼团实时刷新事件：', data)
+
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+  }
+
+  refreshTimer = setTimeout(() => {
+    refreshGroupBuys()
+  }, 300)
 }
 
 const openCreateModal = () => {
@@ -536,5 +557,15 @@ const closeMembersModal = () => {
 
 onMounted(() => {
   refreshGroupBuys()
+
+  window.addEventListener('group-buy-realtime-update', handleRealtimeUpdate)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('group-buy-realtime-update', handleRealtimeUpdate)
+
+  if (refreshTimer) {
+    clearTimeout(refreshTimer)
+  }
 })
 </script>
