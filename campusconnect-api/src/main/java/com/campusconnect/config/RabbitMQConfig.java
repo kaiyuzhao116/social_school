@@ -42,6 +42,48 @@ public class RabbitMQConfig {
      */
     public static final String GROUP_BUY_STATISTICS_QUEUE = "groupbuy.statistics.queue";
 
+    /**
+     * 拼团过期检查路由键
+     * 延迟消息 TTL 到期后，会通过死信交换机转成这个 routing key
+     */
+    public static final String GROUP_BUY_EXPIRE_CHECK_KEY = "groupbuy.expire.check";
+
+    /**
+     * 拼团过期延迟队列
+     * 创建拼团时，先把过期检查消息发送到这里
+     */
+    public static final String GROUP_BUY_EXPIRE_DELAY_QUEUE = "groupbuy.expire.delay.queue";
+
+    /**
+     * 拼团过期检查队列
+     * 延迟队列中的消息 TTL 到期后，会死信转发到这个队列
+     */
+    public static final String GROUP_BUY_EXPIRE_CHECK_QUEUE = "groupbuy.expire.check.queue";
+
+    /**
+     * 拼团过期延迟队列
+     *
+     * 消息进入这个队列后不会被消费者直接消费。
+     * 等消息 TTL 到期后，会通过死信交换机转发到过期检查队列。
+     */
+    @Bean
+    public Queue groupBuyExpireDelayQueue() {
+        return QueueBuilder.durable(GROUP_BUY_EXPIRE_DELAY_QUEUE)
+                .withArgument("x-dead-letter-exchange", CAMPUS_EVENT_EXCHANGE)
+                .withArgument("x-dead-letter-routing-key", GROUP_BUY_EXPIRE_CHECK_KEY)
+                .build();
+    }
+
+    /**
+     * 拼团过期检查队列
+     *
+     * 延迟消息到期后，会进入这个队列。
+     * 后面我们会写消费者监听这个队列，检查拼团是否真的过期。
+     */
+    @Bean
+    public Queue groupBuyExpireCheckQueue() {
+        return new Queue(GROUP_BUY_EXPIRE_CHECK_QUEUE, true);
+    }
     @Bean
     public TopicExchange campusEventExchange() {
         return new TopicExchange(CAMPUS_EVENT_EXCHANGE, true, false);
@@ -122,5 +164,17 @@ public class RabbitMQConfig {
     @Bean
     public ApplicationRunner rabbitMqInitializer(RabbitAdmin rabbitAdmin) {
         return args -> rabbitAdmin.initialize();
+    }
+    /**
+     * 绑定过期检查队列
+     *
+     * 延迟队列中的消息 TTL 到期后，会以 groupbuy.expire.check 路由键
+     * 转发到 campus.event.exchange，再进入这个队列。
+     */
+    @Bean
+    public Binding groupBuyExpireCheckBinding(Queue groupBuyExpireCheckQueue, TopicExchange campusEventExchange) {
+        return BindingBuilder.bind(groupBuyExpireCheckQueue)
+                .to(campusEventExchange)
+                .with(GROUP_BUY_EXPIRE_CHECK_KEY);
     }
 }

@@ -20,6 +20,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
 import java.util.stream.Collectors;
+
+import com.campusconnect.mq.producer.GroupBuyExpireProducer;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -29,6 +33,8 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
     private final GroupBuyEventProducer groupBuyEventProducer;
     @Qualifier("groupBuyQueryExecutor")
     private final Executor groupBuyQueryExecutor;
+
+    private final GroupBuyExpireProducer groupBuyExpireProducer;
     /**
      * 查询首页拼团列表
      */
@@ -148,7 +154,26 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
         }
 
         save(groupBuy);
-
+         // 拼团创建成功后，注册一条 RabbitMQ 延迟过期检查消息
+        // 使用 afterCommit，避免数据库事务回滚但消息已经发出去
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    groupBuyExpireProducer.sendExpireCheckMessage(
+                            groupBuy.getId(),
+                            groupBuy.getTitle(),
+                            groupBuy.getDeadline()
+                    );
+                }
+            });
+        } else {
+            groupBuyExpireProducer.sendExpireCheckMessage(
+                    groupBuy.getId(),
+                    groupBuy.getTitle(),
+                    groupBuy.getDeadline()
+            );
+        }
         GroupBuyMember owner = new GroupBuyMember();
         owner.setGroupBuyId(groupBuy.getId());
         owner.setUserId(userId);
