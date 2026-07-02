@@ -6,7 +6,12 @@ server:
 spring:
   application:
     name: campusconnect-api
-  
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
   # 数据库配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

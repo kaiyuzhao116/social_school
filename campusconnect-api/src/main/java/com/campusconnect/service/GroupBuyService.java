@@ -5,6 +5,8 @@ import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campusconnect.entity.GroupBuy;
 import com.campusconnect.entity.GroupBuyMember;
 import com.campusconnect.mapper.GroupBuyMapper;
+import com.campusconnect.mq.event.GroupBuyEventMessage;
+import com.campusconnect.mq.producer.GroupBuyEventProducer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +19,7 @@ import java.util.List;
 public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
 
     private final GroupBuyMemberService groupBuyMemberService;
-
+    private final GroupBuyEventProducer groupBuyEventProducer;
     /**
      * 查询首页拼团列表
      */
@@ -112,6 +114,16 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
                 .set(GroupBuy::getCurrentCount, newCount)
                 .set(GroupBuy::getStatus, newStatus)
                 .update();
+
+        // 满员成团后发送 MQ 事件
+        if ("SUCCESS".equals(newStatus)) {
+            groupBuy.setCurrentCount(newCount);
+            groupBuy.setStatus(newStatus);
+
+            groupBuyEventProducer.sendSuccessEvent(
+                    buildGroupBuyEventMessage(groupBuy, "GROUP_BUY_SUCCESS", "SUCCESS")
+            );
+        }
     }
 
     /**
@@ -173,5 +185,27 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
                 .eq(GroupBuy::getId, groupBuyId)
                 .set(GroupBuy::getStatus, "CANCELLED")
                 .update();
+
+        // 取消拼团后发送 MQ 事件
+        groupBuy.setStatus("CANCELLED");
+
+        groupBuyEventProducer.sendCancelledEvent(
+                buildGroupBuyEventMessage(groupBuy, "GROUP_BUY_CANCELLED", "CANCELLED")
+        );
+    }
+    /**
+     * 构建拼团 MQ 事件消息
+     */
+    private GroupBuyEventMessage buildGroupBuyEventMessage(GroupBuy groupBuy, String eventType, String status) {
+        return GroupBuyEventMessage.builder()
+                .groupBuyId(groupBuy.getId())
+                .title(groupBuy.getTitle())
+                .initiatorId(groupBuy.getInitiatorId())
+                .eventType(eventType)
+                .status(status)
+                .currentCount(groupBuy.getCurrentCount())
+                .targetCount(groupBuy.getTargetCount())
+                .eventTime(LocalDateTime.now())
+                .build();
     }
 }
