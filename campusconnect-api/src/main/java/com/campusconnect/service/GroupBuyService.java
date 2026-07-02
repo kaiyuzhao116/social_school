@@ -189,57 +189,62 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
      */
     @Transactional
     public void joinGroupBuy(Long groupBuyId, Long userId) {
+        if (groupBuyId == null || userId == null) {
+            throw new RuntimeException("参数不能为空");
+        }
+
+        // 1. 先判断是否已经参加过
+        boolean alreadyJoined = groupBuyMemberService.lambdaQuery()
+                .eq(GroupBuyMember::getGroupBuyId, groupBuyId)
+                .eq(GroupBuyMember::getUserId, userId)
+                .count() > 0;
+
+        if (alreadyJoined) {
+            throw new RuntimeException("你已经参加过该拼团");
+        }
+
+        // 2. 数据库原子更新人数
+        // 只有 status = GROUPING 且 current_count < target_count 时才允许 +1
+        boolean updated = lambdaUpdate()
+                .eq(GroupBuy::getId, groupBuyId)
+                .eq(GroupBuy::getStatus, "GROUPING")
+                .apply("current_count < target_count")
+                .setSql("current_count = current_count + 1")
+                .update();
+
+        if (!updated) {
+            throw new RuntimeException("拼团已满、已结束或不可参加");
+        }
+
+        // 3. 插入拼团成员
+        // 如果同一个用户并发重复点击，这里会被唯一索引兜底拦住
+        GroupBuyMember member = new GroupBuyMember();
+        member.setGroupBuyId(groupBuyId);
+        member.setUserId(userId);
+        member.setRole("MEMBER");
+        member.setJoinedAt(LocalDateTime.now());
+
+        groupBuyMemberService.save(member);
+
+        // 4. 重新查最新拼团数据
         GroupBuy groupBuy = getById(groupBuyId);
 
         if (groupBuy == null) {
             throw new RuntimeException("拼团不存在");
         }
 
-        if (!"GROUPING".equals(groupBuy.getStatus())) {
-            throw new RuntimeException("当前拼团不可加入");
-        }
-
-        if (groupBuy.getDeadline() != null && groupBuy.getDeadline().isBefore(LocalDateTime.now())) {
-            lambdaUpdate()
-                    .eq(GroupBuy::getId, groupBuyId)
-                    .set(GroupBuy::getStatus, "EXPIRED")
-                    .update();
-            throw new RuntimeException("拼团已过期");
-        }
-
-        if (groupBuy.getCurrentCount() >= groupBuy.getTargetCount()) {
-            throw new RuntimeException("拼团人数已满");
-        }
-
-        boolean joined = groupBuyMemberService.lambdaQuery()
-                .eq(GroupBuyMember::getGroupBuyId, groupBuyId)
-                .eq(GroupBuyMember::getUserId, userId)
-                .exists();
-
-        if (joined) {
-            throw new RuntimeException("你已经参加过该拼团");
-        }
-
-        GroupBuyMember member = new GroupBuyMember();
-        member.setGroupBuyId(groupBuyId);
-        member.setUserId(userId);
-        member.setRole("MEMBER");
-        member.setJoinedAt(LocalDateTime.now());
-        groupBuyMemberService.save(member);
-
-        int newCount = groupBuy.getCurrentCount() + 1;
-        String newStatus = newCount >= groupBuy.getTargetCount() ? "SUCCESS" : "GROUPING";
-
-        lambdaUpdate()
+        // 5. 如果人数已经满了，把状态从 GROUPING 改成 SUCCESS
+        // 这里也用条件更新，保证只有一个线程能真正把它改成 SUCCESS
+        boolean successUpdated = lambdaUpdate()
                 .eq(GroupBuy::getId, groupBuyId)
-                .set(GroupBuy::getCurrentCount, newCount)
-                .set(GroupBuy::getStatus, newStatus)
+                .eq(GroupBuy::getStatus, "GROUPING")
+                .apply("current_count >= target_count")
+                .set(GroupBuy::getStatus, "SUCCESS")
                 .update();
 
-        // 满员成团后发送 MQ 事件
-        if ("SUCCESS".equals(newStatus)) {
-            groupBuy.setCurrentCount(newCount);
-            groupBuy.setStatus(newStatus);
+        // 6. 只有真正完成成团状态更新的线程，才发送 MQ
+        if (successUpdated) {
+            groupBuy.setStatus("SUCCESS");
 
             groupBuyEventProducer.sendSuccessEvent(
                     buildGroupBuyEventMessage(groupBuy, "GROUP_BUY_SUCCESS", "SUCCESS")
