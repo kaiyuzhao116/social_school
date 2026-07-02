@@ -280,42 +280,70 @@ const isCreator = (id) => {
   return createdIds.value.includes(id)
 }
 
-const loadGroupBuys = async () => {
-  try {
-    const res = await request.get('/group-buys')
-    groupBuys.value = res.data || []
-  } catch (e) {
-    console.error('加载学生拼团失败:', e)
-    groupBuys.value = []
-  }
-}
-
-const loadMyJoined = async () => {
-  try {
-    const res = await request.get('/group-buys/my-joined')
-    joinedIds.value = res.data || []
-  } catch (e) {
-    console.error('加载我的拼团状态失败:', e)
-    joinedIds.value = []
-  }
-}
-
-const loadMyCreated = async () => {
-  try {
-    const res = await request.get('/group-buys/my-created')
-    createdIds.value = res.data || []
-  } catch (e) {
-    console.error('加载我发起的拼团失败:', e)
-    createdIds.value = []
-  }
-}
+// const loadGroupBuys = async () => {
+//   try {
+//     const res = await request.get('/group-buys')
+//     groupBuys.value = res.data || []
+//   } catch (e) {
+//     console.error('加载学生拼团失败:', e)
+//     groupBuys.value = []
+//   }
+// }
+//
+// const loadMyJoined = async () => {
+//   try {
+//     const res = await request.get('/group-buys/my-joined')
+//     joinedIds.value = res.data || []
+//   } catch (e) {
+//     console.error('加载我的拼团状态失败:', e)
+//     joinedIds.value = []
+//   }
+// }
+//
+// const loadMyCreated = async () => {
+//   try {
+//     const res = await request.get('/group-buys/my-created')
+//     createdIds.value = res.data || []
+//   } catch (e) {
+//     console.error('加载我发起的拼团失败:', e)
+//     createdIds.value = []
+//   }
+// }
+//
+// const refreshGroupBuys = async () => {
+//   await loadGroupBuys()
+//   await loadMyJoined()
+//   await loadMyCreated()
+// }
+const stats = ref({
+  total: 0,
+  grouping: 0,
+  success: 0,
+  cancelled: 0
+})
 
 const refreshGroupBuys = async () => {
-  await loadGroupBuys()
-  await loadMyJoined()
-  await loadMyCreated()
-}
+  try {
+    const res = await request.get('/group-buys/overview')
 
+    const data = res.data || {}
+
+    groupBuys.value = data.groupBuys || []
+    joinedIds.value = data.joinedIds || []
+    createdIds.value = data.createdIds || []
+
+    stats.value = data.stats || {
+      total: 0,
+      grouping: 0,
+      success: 0,
+      cancelled: 0
+    }
+
+    console.log('拼团聚合数据：', data)
+  } catch (error) {
+    console.error('加载拼团聚合数据失败：', error)
+  }
+}
 const openCreateModal = () => {
   form.value = {
     title: '',
