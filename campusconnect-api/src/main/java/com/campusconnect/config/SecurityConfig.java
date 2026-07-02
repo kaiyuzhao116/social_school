@@ -68,10 +68,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/posts/*/like").authenticated()
                         .requestMatchers(HttpMethod.DELETE, "/posts/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/posts/**").authenticated()
-
+                        .requestMatchers("/ws/**").permitAll()
                         // 消息 - 需要认证
                         .requestMatchers("/messages/**").authenticated()
-
+                        .requestMatchers("/group-buy-live/**").permitAll()
                         // 管理员接口
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "MODERATOR")
                         //如果你本地想先把拼团所有操作都放开测试，也可以临时写：

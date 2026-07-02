@@ -12,6 +12,7 @@ import com.campusconnect.entity.GroupBuyMember;
 import com.campusconnect.mapper.GroupBuyMapper;
 import com.campusconnect.mq.event.GroupBuyEventMessage;
 import com.campusconnect.mq.producer.GroupBuyEventProducer;
+import com.campusconnect.ws.GroupBuyLivePushService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -40,6 +41,8 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
     private final Executor groupBuyQueryExecutor;
     private final UserService userService;
     private final GroupBuyExpireProducer groupBuyExpireProducer;
+
+    private final GroupBuyLivePushService groupBuyLivePushService;
     /**
      * 查询首页拼团列表
      */
@@ -251,12 +254,39 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
         if (successUpdated) {
             groupBuy.setStatus("SUCCESS");
 
-            groupBuyEventProducer.sendSuccessEvent(
-                    buildGroupBuyEventMessage(groupBuy, "GROUP_BUY_SUCCESS", "SUCCESS")
-            );
+            // 事务提交后再发送 MQ 和 WebSocket，避免数据库回滚但消息已经推送
+            runAfterCommit(() -> {
+                groupBuyEventProducer.sendSuccessEvent(
+                        buildGroupBuyEventMessage(groupBuy, "GROUP_BUY_SUCCESS", "SUCCESS")
+                );
+
+                groupBuyLivePushService.pushSuccess(groupBuy);
+            });
+        } else {
+            // 没有成团，只推送“有人加入拼团”
+            runAfterCommit(() -> {
+                groupBuyLivePushService.pushJoined(groupBuy);
+            });
         }
     }
-
+    /**
+     * 事务提交后执行任务
+     *
+     * 如果当前方法在事务中，就等事务提交成功后执行；
+     * 如果当前没有事务，就直接执行。
+     */
+    private void runAfterCommit(Runnable task) {
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    task.run();
+                }
+            });
+        } else {
+            task.run();
+        }
+    }
     /**
      * 退出拼团
      */

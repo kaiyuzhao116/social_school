@@ -1,18 +1,24 @@
 <template>
   <div
-    class="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300 flex flex-col min-w-[1024px]">
+      class="min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-gray-100 font-sans transition-colors duration-300 flex flex-col min-w-[1024px]">
     <Navbar v-if="!route.meta.hideNavbar" />
+
     <main :class="route.meta.hideNavbar ? '' : 'flex-1 max-w-7xl w-full mx-auto px-6 lg:px-8 py-6'">
       <router-view />
     </main>
+
     <Footer v-if="!route.meta.hideFooter" />
     <ModalManager v-if="!route.meta.hideNavbar" />
     <GlobalComponents v-if="!route.meta.hideNavbar" />
+
+    <!-- 右下角实时拼团状态卡片 -->
+    <GroupBuyLiveCards v-if="!route.meta.hideNavbar" />
   </div>
 </template>
 
 <script setup>
 import { onMounted, watch } from 'vue'
+import GroupBuyLiveCards from './components/GroupBuyLiveCards.vue'
 import { useRoute } from 'vue-router'
 import Navbar from './components/Navbar.vue'
 import Footer from './components/Footer.vue'
