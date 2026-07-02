@@ -179,31 +179,49 @@ const formData = ref({
   status: '草稿',
   publisher: '教务处'
 })
+const priorityToBackend = (priority) => {
+  if (priority === '置顶') return 'PINNED'
+  if (priority === '普通') return 'NORMAL'
+  return priority || 'NORMAL'
+}
 
-onMounted(async () => {
+const statusToBackend = (status) => {
+  if (status === '已发布') return 'PUBLISHED'
+  if (status === '草稿') return 'DRAFT'
+  return status || 'DRAFT'
+}
+
+const mapAnnouncement = (a) => ({
+  id: a.id,
+  title: a.title || '',
+  content: a.content || '',
+  publisher: a.publisher || '管理员',
+  publisherId: a.publisherId,
+  priority: a.priority === 'PINNED' ? '置顶' : '普通',
+  status: a.status === 'PUBLISHED' ? '已发布' : '草稿',
+  views: a.viewCount || 0,
+  date: a.publishedAt
+      ? new Date(a.publishedAt).toLocaleDateString('zh-CN')
+      : a.createdAt
+          ? new Date(a.createdAt).toLocaleDateString('zh-CN')
+          : '未知'
+})
+
+const loadAnnouncements = async () => {
   isLoading.value = true
   try {
     const data = await dataService.fetchAnnouncements()
-    announcements.value = (data || []).map(a => ({
-      id: a.id,
-      title: a.title || '',
-      content: a.content || '',
-      publisher: a.publisher || '管理员',
-      publisherId: a.publisherId,
-      priority: a.priority === 'PINNED' ? '置顶' : a.priority === 'URGENT' ? '紧急' : '普通',
-      status: a.status === 'PUBLISHED' ? '已发布' : '草稿',
-      viewCount: a.viewCount || 0,
-      publishedAt: a.publishedAt ? new Date(a.publishedAt).toLocaleDateString('zh-CN') : null,
-      createdAt: a.createdAt
-    }))
+    announcements.value = (data || []).map(mapAnnouncement)
   } catch (e) {
     console.error('加载公告失败:', e)
     announcements.value = []
   } finally {
     isLoading.value = false
   }
+}
+onMounted(() => {
+  loadAnnouncements()
 })
-
 const openModal = (item) => {
   if (item) {
     editingItem.value = item
@@ -229,27 +247,35 @@ const closeModal = () => {
 }
 
 const handleSave = async () => {
-  let updatedList = [...announcements.value]
-  
-  if (editingItem.value) {
-    const newItem = { ...editingItem.value, ...formData.value }
-    updatedList = announcements.value.map(a => a.id === editingItem.value.id ? newItem : a)
-    await dataService.saveAnnouncement(newItem)
-  } else {
-    const newAnnouncement = {
-      ...formData.value,
-      id: `a${Date.now()}`,
-      date: new Date().toISOString().split('T')[0],
-      views: 0
+  try {
+    if (!formData.value.title || !formData.value.content) {
+      alert('请填写公告标题和正文内容')
+      return
     }
-    updatedList = [newAnnouncement, ...announcements.value]
-    await dataService.saveAnnouncement(newAnnouncement)
-  }
-  
-  announcements.value = updatedList
-  closeModal()
-}
 
+    const payload = {
+      title: formData.value.title,
+      content: formData.value.content,
+      publisher: formData.value.publisher,
+      priority: priorityToBackend(formData.value.priority),
+      status: statusToBackend(formData.value.status)
+    }
+
+    if (editingItem.value) {
+      payload.id = editingItem.value.id
+      await dataService.saveAnnouncement(payload)
+    } else {
+      // 新增公告不要自己造 id，让数据库自动生成
+      await dataService.saveAnnouncement(payload)
+    }
+
+    closeModal()
+    await loadAnnouncements()
+  } catch (e) {
+    console.error('保存公告失败:', e)
+    alert('保存失败，请查看 F12 控制台或 Network 报错')
+  }
+}
 const handleDelete = async (id) => {
   if (confirm('确定要删除这条公告吗？')) {
     await dataService.deleteAnnouncement(id)
