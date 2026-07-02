@@ -48,7 +48,9 @@
                       ? 'bg-emerald-100 text-emerald-600'
                       : item.status === 'CANCELLED'
                         ? 'bg-orange-100 text-orange-600'
-                        : 'bg-gray-100 text-gray-500'
+                        : item.status === 'EXPIRED'
+                          ? 'bg-gray-100 text-gray-500'
+                          : 'bg-gray-100 text-gray-500'
                 ]"
               >
                 {{ statusText(item.status) }}
@@ -63,6 +65,41 @@
               <div>分类：{{ item.category }}</div>
               <div>地点：{{ item.location }}</div>
               <div>人数：{{ item.currentCount }} / {{ item.targetCount }}</div>
+
+              <div>
+                联系方式：
+                <span
+                    v-if="isCreator(item.id) || hasJoined(item.id)"
+                    class="text-indigo-600 font-bold"
+                >
+                  {{ item.contactInfo || '暂无' }}
+                </span>
+
+                <span
+                    v-else
+                    class="text-gray-400"
+                >
+                  参加后可查看
+                </span>
+              </div>
+
+              <div>
+                成员：
+                <button
+                    v-if="isCreator(item.id) || hasJoined(item.id)"
+                    @click="openMembersModal(item)"
+                    class="text-indigo-600 font-bold hover:underline"
+                >
+                  查看成员
+                </button>
+
+                <span
+                    v-else
+                    class="text-gray-400"
+                >
+                  参加后可查看
+                </span>
+              </div>
             </div>
 
             <div class="mt-3 flex items-center justify-between">
@@ -70,7 +107,6 @@
                 截止：{{ formatTime(item.deadline) }}
               </span>
 
-              <!-- 发起人：取消拼团 -->
               <button
                   v-if="item.status === 'GROUPING' && isCreator(item.id)"
                   @click="handleCancel(item.id)"
@@ -79,7 +115,6 @@
                 取消拼团
               </button>
 
-              <!-- 普通用户未参加：参加拼团 -->
               <button
                   v-else-if="item.status === 'GROUPING' && !hasJoined(item.id)"
                   @click="handleJoin(item.id)"
@@ -88,7 +123,6 @@
                 参加拼团
               </button>
 
-              <!-- 普通用户已参加：退出拼团 -->
               <button
                   v-else-if="item.status === 'GROUPING' && hasJoined(item.id)"
                   @click="handleQuit(item.id)"
@@ -97,7 +131,6 @@
                 退出拼团
               </button>
 
-              <!-- 已成团 / 已取消 / 已过期 -->
               <button
                   v-else
                   disabled
@@ -220,6 +253,71 @@
         </div>
       </div>
     </div>
+
+    <!-- 拼团成员弹窗 -->
+    <div
+        v-if="isMembersModalOpen"
+        class="fixed inset-0 z-[210] flex items-center justify-center bg-black/30 backdrop-blur-sm p-4"
+    >
+      <div class="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+        <div class="p-6 border-b border-gray-100 flex items-center justify-between">
+          <div>
+            <h3 class="text-xl font-bold text-gray-900">拼团成员</h3>
+            <p class="text-sm text-gray-500 mt-1">
+              {{ currentGroupBuyTitle }}
+            </p>
+          </div>
+
+          <button
+              @click="closeMembersModal"
+              class="text-gray-400 hover:text-gray-600 text-xl"
+          >
+            ×
+          </button>
+        </div>
+
+        <div class="p-6">
+          <div v-if="isMembersLoading" class="text-center text-gray-400 py-8">
+            加载中...
+          </div>
+
+          <div v-else-if="members.length === 0" class="text-center text-gray-400 py-8">
+            暂无成员
+          </div>
+
+          <div v-else class="space-y-3">
+            <div
+                v-for="member in members"
+                :key="member.userId"
+                class="flex items-center gap-3 p-3 rounded-2xl bg-gray-50"
+            >
+              <img
+                  :src="member.avatar || 'https://api.dicebear.com/7.x/initials/svg?seed=User'"
+                  class="w-10 h-10 rounded-full object-cover"
+                  alt=""
+              />
+
+              <div class="flex-1">
+                <div class="font-bold text-gray-900">
+                  {{ member.nickname || ('用户' + member.userId) }}
+                </div>
+
+                <div class="text-xs text-gray-400">
+                  {{ member.role === 'OWNER' ? '发起人' : '成员' }}
+                </div>
+              </div>
+
+              <span
+                  v-if="member.role === 'OWNER'"
+                  class="text-xs px-2 py-1 rounded-full bg-indigo-100 text-indigo-600 font-bold"
+              >
+                发起人
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -231,8 +329,20 @@ const groupBuys = ref([])
 const joinedIds = ref([])
 const createdIds = ref([])
 
+const stats = ref({
+  total: 0,
+  grouping: 0,
+  success: 0,
+  cancelled: 0
+})
+
 const isModalOpen = ref(false)
 const isSaving = ref(false)
+
+const isMembersModalOpen = ref(false)
+const isMembersLoading = ref(false)
+const members = ref([])
+const currentGroupBuyTitle = ref('')
 
 const form = ref({
   title: '',
@@ -280,48 +390,6 @@ const isCreator = (id) => {
   return createdIds.value.includes(id)
 }
 
-// const loadGroupBuys = async () => {
-//   try {
-//     const res = await request.get('/group-buys')
-//     groupBuys.value = res.data || []
-//   } catch (e) {
-//     console.error('加载学生拼团失败:', e)
-//     groupBuys.value = []
-//   }
-// }
-//
-// const loadMyJoined = async () => {
-//   try {
-//     const res = await request.get('/group-buys/my-joined')
-//     joinedIds.value = res.data || []
-//   } catch (e) {
-//     console.error('加载我的拼团状态失败:', e)
-//     joinedIds.value = []
-//   }
-// }
-//
-// const loadMyCreated = async () => {
-//   try {
-//     const res = await request.get('/group-buys/my-created')
-//     createdIds.value = res.data || []
-//   } catch (e) {
-//     console.error('加载我发起的拼团失败:', e)
-//     createdIds.value = []
-//   }
-// }
-//
-// const refreshGroupBuys = async () => {
-//   await loadGroupBuys()
-//   await loadMyJoined()
-//   await loadMyCreated()
-// }
-const stats = ref({
-  total: 0,
-  grouping: 0,
-  success: 0,
-  cancelled: 0
-})
-
 const refreshGroupBuys = async () => {
   try {
     const res = await request.get('/group-buys/overview')
@@ -342,8 +410,19 @@ const refreshGroupBuys = async () => {
     console.log('拼团聚合数据：', data)
   } catch (error) {
     console.error('加载拼团聚合数据失败：', error)
+
+    groupBuys.value = []
+    joinedIds.value = []
+    createdIds.value = []
+    stats.value = {
+      total: 0,
+      grouping: 0,
+      success: 0,
+      cancelled: 0
+    }
   }
 }
+
 const openCreateModal = () => {
   form.value = {
     title: '',
@@ -428,6 +507,31 @@ const handleCancel = async (id) => {
     console.error('取消拼团失败:', e)
     alert('取消失败，只有发起人可以取消拼团')
   }
+}
+
+const openMembersModal = async (item) => {
+  isMembersModalOpen.value = true
+  isMembersLoading.value = true
+  currentGroupBuyTitle.value = item.title
+  members.value = []
+
+  try {
+    const res = await request.get(`/group-buys/${item.id}/members`)
+    members.value = res.data || []
+  } catch (e) {
+    console.error('加载拼团成员失败:', e)
+    alert('加载成员失败，只有发起人或已参加成员可以查看')
+    isMembersModalOpen.value = false
+  } finally {
+    isMembersLoading.value = false
+  }
+}
+
+const closeMembersModal = () => {
+  isMembersModalOpen.value = false
+  isMembersLoading.value = false
+  members.value = []
+  currentGroupBuyTitle.value = ''
 }
 
 onMounted(() => {

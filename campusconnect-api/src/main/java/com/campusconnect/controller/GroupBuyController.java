@@ -1,6 +1,7 @@
 package com.campusconnect.controller;
 
 import com.campusconnect.common.Result;
+import com.campusconnect.dto.GroupBuyMemberDTO;
 import com.campusconnect.entity.GroupBuy;
 import com.campusconnect.security.UserPrincipal;
 import com.campusconnect.service.GroupBuyMemberService;
@@ -151,6 +152,19 @@ public class GroupBuyController {
     public Result<GroupBuyOverviewDTO> getOverview(@AuthenticationPrincipal UserPrincipal principal) {
         Long userId = getCurrentUserId(principal);
         return Result.success(groupBuyService.getOverview(userId));
+    }
+    /**
+     * 查询拼团成员列表
+     *
+     * 只有拼团发起人或已参加成员可以查看
+     */
+    @GetMapping("/{id}/members")
+    public Result<List<GroupBuyMemberDTO>> getMembers(
+            @PathVariable Long id,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        Long userId = getCurrentUserId(principal);
+        return Result.success(groupBuyService.getMembers(id, userId));
     }
 //    @GetMapping("/overview")
 //    public Result<GroupBuyOverviewDTO> getOverview(@AuthenticationPrincipal UserPrincipal principal) {

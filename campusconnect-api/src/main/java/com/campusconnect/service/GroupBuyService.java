@@ -1,5 +1,10 @@
 package com.campusconnect.service;
+import com.campusconnect.dto.GroupBuyMemberDTO;
+import com.campusconnect.entity.User;
+import com.campusconnect.service.UserService;
 
+import java.util.*;
+import java.util.function.Function;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campusconnect.entity.GroupBuy;
@@ -13,7 +18,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.List;
+
 import com.campusconnect.dto.GroupBuyOverviewDTO;
 import org.springframework.beans.factory.annotation.Qualifier;
 
@@ -33,7 +38,7 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
     private final GroupBuyEventProducer groupBuyEventProducer;
     @Qualifier("groupBuyQueryExecutor")
     private final Executor groupBuyQueryExecutor;
-
+    private final UserService userService;
     private final GroupBuyExpireProducer groupBuyExpireProducer;
     /**
      * 查询首页拼团列表
@@ -333,5 +338,102 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
                 .targetCount(groupBuy.getTargetCount())
                 .eventTime(LocalDateTime.now())
                 .build();
+    }
+    /**
+     * 查询拼团成员列表
+     *
+     * 权限控制：
+     * 1. 拼团发起人可以查看
+     * 2. 已参加该拼团的成员可以查看
+     * 3. 未参加的人不能查看成员和联系方式
+     */
+    public List<GroupBuyMemberDTO> getMembers(Long groupBuyId, Long currentUserId) {
+        if (groupBuyId == null || currentUserId == null) {
+            throw new RuntimeException("参数不能为空");
+        }
+
+        GroupBuy groupBuy = getById(groupBuyId);
+
+        if (groupBuy == null) {
+            throw new RuntimeException("拼团不存在");
+        }
+
+        List<GroupBuyMember> members = groupBuyMemberService.lambdaQuery()
+                .eq(GroupBuyMember::getGroupBuyId, groupBuyId)
+                .list();
+
+        boolean isCreator = currentUserId.equals(groupBuy.getInitiatorId());
+
+        boolean isMember = members.stream()
+                .anyMatch(member -> currentUserId.equals(member.getUserId()));
+
+        if (!isCreator && !isMember) {
+            throw new RuntimeException("参加拼团后才可以查看成员列表");
+        }
+
+        /**
+         * 收集成员 userId：
+         * 1. group_buy_member 表里的成员
+         * 2. 拼团发起人
+         *
+         * 用 Set 去重，避免发起人重复出现。
+         */
+        Set<Long> userIds = new LinkedHashSet<>();
+
+        if (groupBuy.getInitiatorId() != null) {
+            userIds.add(groupBuy.getInitiatorId());
+        }
+
+        for (GroupBuyMember member : members) {
+            if (member.getUserId() != null) {
+                userIds.add(member.getUserId());
+            }
+        }
+
+        if (userIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        Map<Long, User> userMap = userService.listByIds(userIds)
+                .stream()
+                .collect(Collectors.toMap(User::getId, Function.identity()));
+
+        List<GroupBuyMemberDTO> result = new ArrayList<>();
+
+        for (Long userId : userIds) {
+            User user = userMap.get(userId);
+
+            if (user == null) {
+                continue;
+            }
+
+            String role = currentUserRole(userId, groupBuy, members);
+
+            result.add(GroupBuyMemberDTO.builder()
+                    .userId(user.getId())
+                    .nickname(user.getNickname())
+                    .avatar(user.getAvatar())
+                    .role(role)
+                    .build());
+        }
+
+        return result;
+    }
+
+    /**
+     * 判断成员角色
+     */
+    private String currentUserRole(Long userId, GroupBuy groupBuy, List<GroupBuyMember> members) {
+        if (userId.equals(groupBuy.getInitiatorId())) {
+            return "OWNER";
+        }
+
+        for (GroupBuyMember member : members) {
+            if (userId.equals(member.getUserId())) {
+                return member.getRole();
+            }
+        }
+
+        return "MEMBER";
     }
 }
