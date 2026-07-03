@@ -34,4 +34,6 @@ public class ChatRoomVO {
      * 最后一条消息时间，格式 HH:mm
      */
     private String lastMessageTime;
+
+    private Integer type;
 }

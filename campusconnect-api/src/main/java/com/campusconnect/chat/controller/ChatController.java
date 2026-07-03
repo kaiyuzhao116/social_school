@@ -1,6 +1,7 @@
 package com.campusconnect.chat.controller;
 
 import com.campusconnect.chat.dto.ChatSendMessageDTO;
+import com.campusconnect.chat.dto.CreatePrivateConversationDTO;
 import com.campusconnect.chat.service.ChatService;
 import com.campusconnect.chat.vo.ChatMessageVO;
 import com.campusconnect.chat.vo.ChatRoomVO;
@@ -72,7 +73,20 @@ public class ChatController {
         ChatMessageVO message = chatService.sendMessage(currentUserId, dto);
         return Result.success(message);
     }
+    /**
+     * 创建或获取一对一私聊会话
+     */
+    @PostMapping("/private/conversations")
+    public Result<?> createPrivateConversation(
+            @RequestBody CreatePrivateConversationDTO dto,
+            @AuthenticationPrincipal UserPrincipal principal) {
 
+        Long currentUserId = getCurrentUserId(principal);
+
+        return Result.success(
+                chatService.createOrGetPrivateConversation(currentUserId, dto.getTargetUserId())
+        );
+    }
     /**
      * 获取当前登录用户ID
      * 
@@ -84,5 +98,15 @@ public class ChatController {
             throw new RuntimeException("用户未登录，请重新登录");
         }
         return principal.getId();
+    }
+
+    /**
+     * 查询可私聊用户列表
+     */
+    @GetMapping("/private/users")
+    public Result<?> getPrivateChatUsers(@AuthenticationPrincipal UserPrincipal principal) {
+        Long currentUserId = getCurrentUserId(principal);
+
+        return Result.success(chatService.getPrivateChatUsers(currentUserId));
     }
 }

@@ -12,9 +12,15 @@
           </span>
         </div>
 
-        <button class="back-btn" @click="router.push('/')">
-          返回首页
-        </button>
+        <div class="header-actions">
+          <button class="private-btn" @click="openPrivateUserDialog">
+            发起私聊
+          </button>
+
+          <button class="back-btn" @click="router.push('/')">
+            返回首页
+          </button>
+        </div>
       </div>
 
       <div class="chat-box">
@@ -30,9 +36,42 @@
             theme="light"
             @fetch-messages="fetchMessages($event.detail[0])"
             @send-message="sendMessage($event.detail[0])"
+            @add-room="openPrivateUserDialog"
         />
+
         <div v-else class="chat-loading">
           正在加载用户信息...
+        </div>
+
+        <div v-if="showPrivateDialog" class="private-dialog-mask">
+          <div class="private-dialog">
+            <div class="private-dialog-header">
+              <h3>发起私聊</h3>
+              <button @click="showPrivateDialog = false">×</button>
+            </div>
+
+            <div class="private-user-list">
+              <div
+                  v-for="user in privateUsers"
+                  :key="user.userId"
+                  class="private-user-item"
+                  @click="startPrivateChat(user)"
+              >
+                <div class="private-user-avatar">
+                  {{ getUserAvatarText(user) }}
+                </div>
+
+                <div class="private-user-info">
+                  <div class="private-user-name">
+                    {{ user.nickname || user.username }}
+                  </div>
+                  <div class="private-user-sub">
+                    @{{ user.username }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -62,7 +101,8 @@ const roomsLoaded = ref(false)
 const messagesLoaded = ref(false)
 
 const currentRoomId = ref(null)
-
+const showPrivateDialog = ref(false)
+const privateUsers = ref([])
 /**
  * 兼容不同 request 封装返回格式
  */
@@ -216,6 +256,7 @@ function handleWebSocketChatMessage(message) {
 function convertRoom(item, index) {
   return {
     roomId: String(item.roomId),
+    type: item.type,
     roomName: item.roomName,
     avatar: item.avatar || '',
     unreadCount: item.unreadCount || 0,
@@ -284,7 +325,74 @@ function convertMessage(item) {
     seen: false
   }
 }
+async function startPrivateChat(user) {
+  if (!user || !user.userId) {
+    return
+  }
 
+  try {
+    const res = await chatApi.createPrivateConversation({
+      targetUserId: user.userId
+    })
+
+    const room = getObjectData(res)
+
+    console.log('创建/获取私聊会话：', room)
+
+    showPrivateDialog.value = false
+
+    const convertedRoom = convertRoom(room, 0)
+
+    const exists = rooms.value.some(
+        item => String(item.roomId) === String(convertedRoom.roomId)
+    )
+
+    if (!exists) {
+      rooms.value = [
+        convertedRoom,
+        ...rooms.value
+      ]
+    } else {
+      rooms.value = rooms.value.map(item => {
+        if (String(item.roomId) === String(convertedRoom.roomId)) {
+          return {
+            ...item,
+            ...convertedRoom
+          }
+        }
+        return item
+      })
+    }
+
+    rooms.value = rooms.value.map((item, index) => ({
+      ...item,
+      index
+    }))
+
+    currentRoomId.value = String(convertedRoom.roomId)
+
+    await loadMessages(currentRoomId.value)
+  } catch (error) {
+    console.error('创建私聊失败：', error)
+  }
+}
+function getUserAvatarText(user) {
+  const name = user?.nickname || user?.username || '?'
+  return name.slice(0, 1)
+}
+async function openPrivateUserDialog() {
+  showPrivateDialog.value = true
+
+  try {
+    const res = await chatApi.getPrivateUsers()
+    privateUsers.value = getListData(res)
+
+    console.log('可私聊用户列表：', privateUsers.value)
+  } catch (error) {
+    console.error('加载可私聊用户失败：', error)
+    privateUsers.value = []
+  }
+}
 /**
  * 加载聊天室列表
  */
@@ -545,8 +653,31 @@ onBeforeUnmount(() => {
   background: #f3f4ff;
   transform: translateY(-1px);
 }
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
 
+.private-btn {
+  height: 40px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 12px;
+  background: #5b5cf6;
+  color: #ffffff;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(91, 92, 246, 0.18);
+  transition: all 0.2s ease;
+}
+
+.private-btn:hover {
+  background: #4f46e5;
+  transform: translateY(-1px);
+}
 .chat-box {
+  position: relative;
   height: calc(100vh - 190px);
   background: #ffffff;
   border-radius: 20px;
@@ -562,5 +693,92 @@ onBeforeUnmount(() => {
   justify-content: center;
   color: #8b95a7;
   font-size: 14px;
+}
+.private-dialog-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+
+.private-dialog {
+  width: 360px;
+  max-height: 480px;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.private-dialog-header {
+  height: 54px;
+  padding: 0 18px;
+  border-bottom: 1px solid #edf0f7;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.private-dialog-header h3 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.private-dialog-header button {
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  color: #8b95a7;
+  cursor: pointer;
+}
+
+.private-user-list {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.private-user-item {
+  height: 64px;
+  border-radius: 14px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.private-user-item:hover {
+  background: #f3f6ff;
+}
+
+.private-user-avatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: #6366f1;
+  color: #ffffff;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 12px;
+}
+
+.private-user-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.private-user-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: #8b95a7;
 }
 </style>

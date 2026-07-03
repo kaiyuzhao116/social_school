@@ -499,5 +499,14 @@ export const chatApi = {
   // 标记聊天室已读
   markConversationRead(conversationId) {
     return request.put(`/chat/conversations/${conversationId}/read`)
+  },
+  // 查询可私聊用户
+  getPrivateUsers() {
+    return request.get('/chat/private/users')
+  },
+
+  // 创建或获取一对一私聊会话
+  createPrivateConversation(data) {
+    return request.post('/chat/private/conversations', data)
   }
 }

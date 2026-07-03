@@ -1,11 +1,13 @@
 package com.campusconnect.chat.service.impl;
 
 import com.campusconnect.chat.dto.ChatSendMessageDTO;
+import com.campusconnect.chat.entity.ChatConversation;
 import com.campusconnect.chat.entity.ChatMessage;
 import com.campusconnect.chat.mapper.ChatMapper;
 import com.campusconnect.chat.service.ChatService;
 import com.campusconnect.chat.vo.ChatMessageVO;
 import com.campusconnect.chat.vo.ChatRoomVO;
+import com.campusconnect.chat.vo.PrivateChatUserVO;
 import com.campusconnect.chat.websocket.ChatWebSocketSessionManager;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -49,6 +51,56 @@ public class ChatServiceImpl implements ChatService {
         Long latestMessageId = chatMapper.selectLatestMessageId(conversationId);
 
         chatMapper.markConversationRead(conversationId, userId, latestMessageId);
+    }
+
+    @Override
+    @Transactional
+    public ChatRoomVO createOrGetPrivateConversation(Long userId, Long targetUserId) {
+        if (targetUserId == null) {
+            throw new RuntimeException("目标用户不能为空");
+        }
+
+        if (userId.equals(targetUserId)) {
+            throw new RuntimeException("不能和自己创建私聊");
+        }
+
+        String privateKey = buildPrivateKey(userId, targetUserId);
+
+        Long conversationId = chatMapper.selectPrivateConversationIdByKey(privateKey);
+
+        // 已经有私聊会话，直接返回
+        if (conversationId != null) {
+            return chatMapper.selectChatRoomByIdAndUserId(conversationId, userId);
+        }
+
+        // 没有就创建新的私聊会话
+        ChatConversation conversation = new ChatConversation();
+        conversation.setType(1);
+        conversation.setPrivateKey(privateKey);
+        conversation.setName(null);
+        conversation.setOwnerId(userId);
+        conversation.setStatus(1);
+
+        chatMapper.insertChatConversation(conversation);
+
+        Long newConversationId = conversation.getId();
+
+        // 当前用户是 owner，role = 1
+        chatMapper.insertConversationMember(newConversationId, userId, 1);
+
+        // 对方是普通成员，role = 2
+        chatMapper.insertConversationMember(newConversationId, targetUserId, 2);
+
+        return chatMapper.selectChatRoomByIdAndUserId(newConversationId, userId);
+    }
+
+    /**
+     * 生成私聊唯一 key，保证 2 和 5 永远生成 2_5
+     */
+    private String buildPrivateKey(Long userId, Long targetUserId) {
+        long min = Math.min(userId, targetUserId);
+        long max = Math.max(userId, targetUserId);
+        return min + "_" + max;
     }
     @Override
     @Transactional
@@ -124,5 +176,9 @@ public class ChatServiceImpl implements ChatService {
             // WebSocket 推送失败不能影响消息落库
             System.err.println("WebSocket 推送失败：" + e.getMessage());
         }
+    }
+    @Override
+    public List<PrivateChatUserVO> getPrivateChatUsers(Long userId) {
+        return chatMapper.selectPrivateChatUsers(userId);
     }
 }

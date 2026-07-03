@@ -3,6 +3,7 @@ package com.campusconnect.chat.service;
 import com.campusconnect.chat.dto.ChatSendMessageDTO;
 import com.campusconnect.chat.vo.ChatMessageVO;
 import com.campusconnect.chat.vo.ChatRoomVO;
+import com.campusconnect.chat.vo.PrivateChatUserVO;
 
 import java.util.List;
 
@@ -25,4 +26,6 @@ public interface ChatService {
      * 发送聊天消息
      */
     ChatMessageVO sendMessage(Long userId, ChatSendMessageDTO dto);
+    List<PrivateChatUserVO> getPrivateChatUsers(Long userId);
+    ChatRoomVO createOrGetPrivateConversation(Long userId, Long targetUserId);
 }
