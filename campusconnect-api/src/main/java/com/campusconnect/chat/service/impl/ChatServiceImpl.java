@@ -11,7 +11,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import com.campusconnect.chat.mq.ChatMessageEvent;
+import com.campusconnect.chat.mq.ChatMessageProducer;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -21,7 +24,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class ChatServiceImpl implements ChatService {
-
+    private final ChatMessageProducer chatMessageProducer;
     private final ChatMapper chatMapper;
     private final ChatWebSocketSessionManager chatWebSocketSessionManager;
     private final ObjectMapper objectMapper;
@@ -84,12 +87,20 @@ public class ChatServiceImpl implements ChatService {
                 message.getContent()
         );
 
-        chatMapper.increaseUnreadCount(dto.getConversationId(), userId);
-
         ChatMessageVO messageVO = chatMapper.selectMessageById(message.getId());
 
-// WebSocket 推送给其他在线成员
-        pushMessageToOnlineMembers(dto.getConversationId(), userId, messageVO);
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                chatMessageProducer.sendMessageCreated(
+                        new ChatMessageEvent(
+                                dto.getConversationId(),
+                                userId,
+                                message.getId()
+                        )
+                );
+            }
+        });
 
         return messageVO;
     }
