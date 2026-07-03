@@ -20,9 +20,9 @@
       <div class="chat-box">
         <vue-advanced-chat
             v-if="currentUserId && currentUserId !== 'undefined'"
-            :key="`chat-${currentUserId}`"
+            :key="`chat-${currentUserId}-${rooms.length}-${rooms.map(r => r.roomId + '-' + r.unreadCount).join('_')}`"
             height="calc(100vh - 190px)"
-            :current-user-id="currentUserId"
+            :current-user-id.prop="currentUserId"
             :rooms="JSON.stringify(rooms)"
             :rooms-loaded="roomsLoaded"
             :messages="JSON.stringify(messages)"
@@ -31,7 +31,6 @@
             @fetch-messages="fetchMessages($event.detail[0])"
             @send-message="sendMessage($event.detail[0])"
         />
-
         <div v-else class="chat-loading">
           正在加载用户信息...
         </div>
@@ -337,11 +336,15 @@ async function loadMessages(roomId) {
  * 标记当前聊天室已读，并更新左侧未读数
  */
 async function markRoomRead(roomId) {
+  console.log('准备标记已读，roomId =', roomId)
+
   try {
-    await chatApi.markConversationRead(roomId)
+    const res = await chatApi.markConversationRead(roomId)
+
+    console.log('标记已读接口返回：', res)
 
     rooms.value = rooms.value.map((room) => {
-      if (room.roomId !== String(roomId)) {
+      if (String(room.roomId) !== String(roomId)) {
         return room
       }
 
@@ -350,11 +353,21 @@ async function markRoomRead(roomId) {
         unreadCount: 0
       }
     })
+
+    rooms.value = [...rooms.value]
+
+    console.log(
+        '清零后的 rooms：',
+        rooms.value.map(room => ({
+          roomId: room.roomId,
+          roomName: room.roomName,
+          unreadCount: room.unreadCount
+        }))
+    )
   } catch (error) {
     console.error('标记已读失败：', error)
   }
 }
-
 /**
  * vue-advanced-chat 切换房间 / 拉取消息时会触发
  */
@@ -363,12 +376,14 @@ async function fetchMessages(data) {
 
   const roomId = data?.room?.roomId || data?.roomId
 
-  if (roomId && roomId !== currentRoomId.value) {
-    currentRoomId.value = roomId
-    await loadMessages(roomId)
-  } else {
+  if (!roomId) {
     messagesLoaded.value = true
+    return
   }
+
+  currentRoomId.value = String(roomId)
+
+  await loadMessages(roomId)
 }
 
 /**

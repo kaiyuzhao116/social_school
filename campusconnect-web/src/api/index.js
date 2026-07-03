@@ -495,5 +495,9 @@ export const chatApi = {
   // 发送聊天消息
   sendMessage(data) {
     return request.post('/chat/messages', data)
+  },
+  // 标记聊天室已读
+  markConversationRead(conversationId) {
+    return request.put(`/chat/conversations/${conversationId}/read`)
   }
 }
