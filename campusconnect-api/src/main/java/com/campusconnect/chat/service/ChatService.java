@@ -21,7 +21,7 @@ public interface ChatService {
      * 获取某个聊天室的历史消息
      */
     List<ChatMessageVO> getChatMessages(Long conversationId);
-
+    void burnReadMessage(Long userId, Long messageId);
     /**
      * 发送聊天消息
      */

@@ -43,26 +43,28 @@ public interface ChatMapper {
     ORDER BY c.last_message_time DESC, c.update_time DESC
 """)
     List<ChatRoomVO> selectChatRoomsByUserId(@Param("userId") Long userId);
-    /**
-     * 查询某个聊天室的历史消息
-     */
     @Select("""
-        SELECT
-            msg.id AS messageId,
-            msg.conversation_id AS conversationId,
-            msg.sender_id AS senderId,
-            u.nickname AS username,
-            msg.content AS content,
-            msg.message_type AS messageType,
-            DATE_FORMAT(msg.send_time, '%Y-%m-%d') AS messageDate,
-            DATE_FORMAT(msg.send_time, '%H:%i') AS messageTime
-        FROM chat_message msg
-        LEFT JOIN user u
-            ON msg.sender_id = u.id
-        WHERE msg.conversation_id = #{conversationId}
-          AND msg.status = 1
-        ORDER BY msg.send_time ASC
-    """)
+    SELECT
+        msg.id AS messageId,
+        msg.conversation_id AS conversationId,
+        msg.sender_id AS senderId,
+        u.nickname AS username,
+        CASE
+            WHEN msg.burned = 1 THEN '消息已焚毁'
+            ELSE msg.content
+        END AS content,
+        msg.message_type AS messageType,
+        msg.burn_after_read AS burnAfterRead,
+        msg.burned AS burned,
+        DATE_FORMAT(msg.send_time, '%Y-%m-%d') AS messageDate,
+        DATE_FORMAT(msg.send_time, '%H:%i') AS messageTime
+    FROM chat_message msg
+    LEFT JOIN user u
+        ON msg.sender_id = u.id
+    WHERE msg.conversation_id = #{conversationId}
+      AND msg.status = 1
+    ORDER BY msg.send_time ASC
+""")
     List<ChatMessageVO> selectMessagesByConversationId(@Param("conversationId") Long conversationId);
 
     /**
@@ -82,11 +84,11 @@ public interface ChatMapper {
      * 插入聊天消息
      */
     @Insert("""
-        INSERT INTO chat_message
-        (conversation_id, sender_id, client_msg_id, message_type, content, status, send_time)
-        VALUES
-        (#{conversationId}, #{senderId}, #{clientMsgId}, #{messageType}, #{content}, #{status}, #{sendTime})
-    """)
+    INSERT INTO chat_message
+    (conversation_id, sender_id, client_msg_id, message_type, burn_after_read, burned, content, status, send_time)
+    VALUES
+    (#{conversationId}, #{senderId}, #{clientMsgId}, #{messageType}, #{burnAfterRead}, #{burned}, #{content}, #{status}, #{sendTime})
+""")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertChatMessage(ChatMessage chatMessage);
 
@@ -123,22 +125,26 @@ public interface ChatMapper {
      * 根据消息ID查询消息详情
      */
     @Select("""
-        SELECT
-            msg.id AS messageId,
-            msg.conversation_id AS conversationId,
-            msg.sender_id AS senderId,
-            u.nickname AS username,
-            msg.content AS content,
-            msg.message_type AS messageType,
-            DATE_FORMAT(msg.send_time, '%Y-%m-%d') AS messageDate,
-            DATE_FORMAT(msg.send_time, '%H:%i') AS messageTime
-        FROM chat_message msg
-        LEFT JOIN user u
-            ON msg.sender_id = u.id
-        WHERE msg.id = #{messageId}
-    """)
+    SELECT
+        msg.id AS messageId,
+        msg.conversation_id AS conversationId,
+        msg.sender_id AS senderId,
+        u.nickname AS username,
+        CASE
+            WHEN msg.burned = 1 THEN '消息已焚毁'
+            ELSE msg.content
+        END AS content,
+        msg.message_type AS messageType,
+        msg.burn_after_read AS burnAfterRead,
+        msg.burned AS burned,
+        DATE_FORMAT(msg.send_time, '%Y-%m-%d') AS messageDate,
+        DATE_FORMAT(msg.send_time, '%H:%i') AS messageTime
+    FROM chat_message msg
+    LEFT JOIN user u
+        ON msg.sender_id = u.id
+    WHERE msg.id = #{messageId}
+""")
     ChatMessageVO selectMessageById(@Param("messageId") Long messageId);
-
     /**
      * 查询某个会话最新消息ID
      */
@@ -230,7 +236,61 @@ public interface ChatMapper {
                                  @Param("userId") Long userId,
                                  @Param("role") Integer role);
 
+    /**
+     * 根据消息ID查询消息实体
+     */
+    @Select("""
+    SELECT
+        id,
+        conversation_id AS conversationId,
+        sender_id AS senderId,
+        client_msg_id AS clientMsgId,
+        message_type AS messageType,
+        burn_after_read AS burnAfterRead,
+        burned AS burned,
+        burned_time AS burnedTime,
+        burn_trigger_user_id AS burnTriggerUserId,
+        content,
+        status,
+        send_time AS sendTime
+    FROM chat_message
+    WHERE id = #{messageId}
+      AND status = 1
+""")
+    ChatMessage selectChatMessageEntityById(@Param("messageId") Long messageId);
+    /**
+     * 标记阅后即焚消息已焚毁
+     */
+    @Update("""
+    UPDATE chat_message
+    SET burned = 1,
+        burned_time = NOW(),
+        burn_trigger_user_id = #{userId},
+        update_time = NOW()
+    WHERE id = #{messageId}
+      AND burn_after_read = 1
+      AND burned = 0
+      AND status = 1
+""")
+    int burnMessageAfterRead(@Param("messageId") Long messageId,
+                             @Param("userId") Long userId);
 
+
+    /**
+     * 校验用户是否属于该消息所在会话
+     */
+    @Select("""
+    SELECT COUNT(1)
+    FROM chat_message msg
+    JOIN chat_conversation_member m
+        ON msg.conversation_id = m.conversation_id
+    WHERE msg.id = #{messageId}
+      AND m.user_id = #{userId}
+      AND m.status = 1
+      AND msg.status = 1
+""")
+    Integer countUserCanAccessMessage(@Param("messageId") Long messageId,
+                                      @Param("userId") Long userId);
     /**
      * 查询某个用户视角下的会话信息
      */

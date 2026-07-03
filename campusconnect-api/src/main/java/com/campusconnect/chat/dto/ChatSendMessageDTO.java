@@ -6,6 +6,10 @@ import lombok.Data;
 public class ChatSendMessageDTO {
 
     /**
+     * 是否阅后即焚
+     */
+    private Boolean burnAfterRead;
+    /**
      * 会话ID
      */
     private Long conversationId;

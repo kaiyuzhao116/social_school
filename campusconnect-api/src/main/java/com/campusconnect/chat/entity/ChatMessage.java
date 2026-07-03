@@ -22,4 +22,23 @@ public class ChatMessage {
     private Integer status;
 
     private LocalDateTime sendTime;
+
+    /**
+     * 是否阅后即焚：0否，1是
+     */
+    private Integer burnAfterRead;
+
+    /**
+     * 是否已焚毁：0否，1是
+     */
+    private Integer burned;
+    /**
+     * 焚毁时间
+     */
+    private LocalDateTime burnedTime;
+
+    /**
+     * 触发焚毁的用户ID
+     */
+    private Long burnTriggerUserId;
 }

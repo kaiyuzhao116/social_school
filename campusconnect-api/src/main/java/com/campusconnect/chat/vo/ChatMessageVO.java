@@ -44,4 +44,8 @@ public class ChatMessageVO {
      * 消息时间，例如 16:42
      */
     private String messageTime;
+
+    private Integer burnAfterRead;
+
+    private Integer burned;
 }

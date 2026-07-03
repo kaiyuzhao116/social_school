@@ -508,5 +508,9 @@ export const chatApi = {
   // 创建或获取一对一私聊会话
   createPrivateConversation(data) {
     return request.post('/chat/private/conversations', data)
+  },
+  // 阅读阅后即焚消息，并触发焚毁
+  burnReadMessage(messageId) {
+    return request.put(`/chat/messages/${messageId}/burn-read`)
   }
 }

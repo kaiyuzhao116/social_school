@@ -13,6 +13,14 @@
         </div>
 
         <div class="header-actions">
+          <button
+              class="burn-mode-btn"
+              :class="{ active: burnAfterReadMode }"
+              @click="burnAfterReadMode = !burnAfterReadMode"
+          >
+            {{ burnAfterReadMode ? '阅后即焚：开' : '阅后即焚：关' }}
+          </button>
+
           <button class="private-btn" @click="openPrivateUserDialog">
             发起私聊
           </button>
@@ -103,6 +111,11 @@ const messagesLoaded = ref(false)
 const currentRoomId = ref(null)
 const showPrivateDialog = ref(false)
 const privateUsers = ref([])
+// 是否开启阅后即焚发送模式
+const burnAfterReadMode = ref(false)
+
+// 防止同一条阅后即焚消息重复触发定时器
+const burnTimerMap = new Map()
 /**
  * 兼容不同 request 封装返回格式
  */
@@ -228,10 +241,14 @@ function handleWebSocketChatMessage(message) {
     )
 
     if (!exists) {
+      const convertedMessage = convertMessage(message)
+
       messages.value = [
         ...messages.value,
-        convertMessage(message)
+        convertedMessage
       ]
+
+      scheduleBurnMessage(convertedMessage)
     }
 
     markRoomRead(roomId)
@@ -313,16 +330,22 @@ function convertRoom(item, index) {
  * 后端消息 -> vue-advanced-chat messages
  */
 function convertMessage(item) {
+  const burned = Number(item.burned ?? item.burned_status ?? 0)
+  const burnAfterRead = Number(item.burnAfterRead ?? item.burn_after_read ?? 0)
+
   return {
     _id: String(item.messageId),
-    content: item.content,
+    content: burned === 1 ? '消息已焚毁' : item.content,
     senderId: String(item.senderId),
     username: item.username || '未知用户',
     date: item.messageDate || '今天',
     timestamp: item.messageTime || '',
     saved: true,
     distributed: true,
-    seen: false
+    seen: false,
+
+    burnAfterRead,
+    burned
   }
 }
 async function startPrivateChat(user) {
@@ -431,6 +454,8 @@ async function loadMessages(roomId) {
 
     messages.value = list.map(convertMessage)
 
+    scheduleBurnAfterReadMessages()
+
     await markRoomRead(roomId)
   } catch (error) {
     console.error('加载聊天消息失败：', error)
@@ -518,6 +543,7 @@ async function sendMessage(data) {
       conversationId: Number(roomId),
       content,
       messageType: 1,
+      burnAfterRead: burnAfterReadMode.value,
       clientMsgId: createClientMsgId()
     })
 
@@ -570,7 +596,77 @@ function createClientMsgId() {
 
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
+/**
+ * 检查当前消息列表里有没有需要焚毁的消息
+ */
+function scheduleBurnAfterReadMessages() {
+  messages.value.forEach((message) => {
+    scheduleBurnMessage(message)
+  })
+}
 
+/**
+ * 对单条阅后即焚消息设置焚毁定时器
+ */
+function scheduleBurnMessage(message) {
+  console.log('检查阅后即焚消息：', message)
+
+  if (!message || !message._id) {
+    console.log('跳过：消息为空')
+    return
+  }
+
+  if (Number(message.burnAfterRead) !== 1) {
+    console.log('跳过：不是阅后即焚消息', message._id, message.burnAfterRead)
+    return
+  }
+
+  if (Number(message.burned) === 1) {
+    console.log('跳过：已经焚毁', message._id)
+    return
+  }
+
+  if (String(message.senderId) === String(currentUserId.value)) {
+    console.log('跳过：这是自己发的阅后即焚消息', message._id)
+    return
+  }
+
+  if (burnTimerMap.has(message._id)) {
+    console.log('跳过：已经设置过定时器', message._id)
+    return
+  }
+
+  console.log('阅后即焚消息开始倒计时：', message._id)
+
+  const timer = setTimeout(async () => {
+    try {
+      console.log('准备调用 burn-read 接口：', message._id)
+
+      await chatApi.burnReadMessage(message._id)
+
+      messages.value = messages.value.map((item) => {
+        if (String(item._id) !== String(message._id)) {
+          return item
+        }
+
+        return {
+          ...item,
+          content: '消息已焚毁',
+          burned: 1
+        }
+      })
+
+      burnTimerMap.delete(message._id)
+
+      console.log('阅后即焚消息已焚毁：', message._id)
+    } catch (error) {
+      console.error('阅后即焚消息焚毁失败：', error)
+      burnTimerMap.delete(message._id)
+    }
+  }, 5000)
+
+  burnTimerMap.set(message._id, timer)
+}
 /**
  * 页面初始化
  */
@@ -593,6 +689,12 @@ onBeforeUnmount(() => {
   if (chatSocket.value) {
     chatSocket.value.close()
   }
+
+  burnTimerMap.forEach((timer) => {
+    clearTimeout(timer)
+  })
+
+  burnTimerMap.clear()
 })
 </script>
 
@@ -780,5 +882,33 @@ onBeforeUnmount(() => {
   margin-top: 3px;
   font-size: 12px;
   color: #8b95a7;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.burn-mode-btn {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #ef4444;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(80, 90, 120, 0.08);
+  transition: all 0.2s ease;
+}
+
+.burn-mode-btn.active {
+  background: #ef4444;
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgba(239, 68, 68, 0.2);
+}
+
+.burn-mode-btn:hover {
+  transform: translateY(-1px);
 }
 </style>

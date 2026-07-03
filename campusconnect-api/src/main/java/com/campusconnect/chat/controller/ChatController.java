@@ -109,4 +109,18 @@ public class ChatController {
 
         return Result.success(chatService.getPrivateChatUsers(currentUserId));
     }
+    /**
+     * 阅读阅后即焚消息，并触发焚毁
+     */
+    @PutMapping("/messages/{messageId}/burn-read")
+    public Result<?> burnReadMessage(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Long currentUserId = getCurrentUserId(principal);
+
+        chatService.burnReadMessage(currentUserId, messageId);
+
+        return Result.success();
+    }
 }

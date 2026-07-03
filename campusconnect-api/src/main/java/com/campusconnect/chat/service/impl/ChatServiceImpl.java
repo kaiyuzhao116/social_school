@@ -127,17 +127,33 @@ public class ChatServiceImpl implements ChatService {
                         : dto.getClientMsgId()
         );
         message.setMessageType(dto.getMessageType() == null ? 1 : dto.getMessageType());
+
+        // 是否阅后即焚：前端传 true 就是 1，否则默认 0
+        Integer burnAfterRead = Boolean.TRUE.equals(dto.getBurnAfterRead()) ? 1 : 0;
+        message.setBurnAfterRead(burnAfterRead);
+
+        // 新消息默认未焚毁
+        message.setBurned(0);
+
         message.setContent(dto.getContent().trim());
         message.setStatus(1);
         message.setSendTime(LocalDateTime.now());
 
         chatMapper.insertChatMessage(message);
 
+        // 如果是阅后即焚消息，会话列表最后一条不要展示原文
+        String lastMessageContent = burnAfterRead == 1
+                ? "[阅后即焚消息]"
+                : message.getContent();
+
         chatMapper.updateConversationLastMessage(
                 dto.getConversationId(),
                 message.getId(),
-                message.getContent()
+                lastMessageContent
         );
+
+        // 给其他成员未读数 +1
+        chatMapper.increaseUnreadCount(dto.getConversationId(), userId);
 
         ChatMessageVO messageVO = chatMapper.selectMessageById(message.getId());
 
@@ -180,5 +196,37 @@ public class ChatServiceImpl implements ChatService {
     @Override
     public List<PrivateChatUserVO> getPrivateChatUsers(Long userId) {
         return chatMapper.selectPrivateChatUsers(userId);
+    }
+    @Override
+    @Transactional
+    public void burnReadMessage(Long userId, Long messageId) {
+        if (messageId == null) {
+            throw new RuntimeException("消息ID不能为空");
+        }
+
+        ChatMessage message = chatMapper.selectChatMessageEntityById(messageId);
+
+        if (message == null) {
+            throw new RuntimeException("消息不存在");
+        }
+
+        Integer canAccess = chatMapper.countUserCanAccessMessage(messageId, userId);
+        if (canAccess == null || canAccess <= 0) {
+            throw new RuntimeException("你无权查看该消息");
+        }
+
+        if (message.getBurnAfterRead() == null || message.getBurnAfterRead() != 1) {
+            throw new RuntimeException("该消息不是阅后即焚消息");
+        }
+
+        if (message.getBurned() != null && message.getBurned() == 1) {
+            return;
+        }
+
+        if (message.getSenderId().equals(userId)) {
+            throw new RuntimeException("发送人不能触发自己的阅后即焚消息");
+        }
+
+        chatMapper.burnMessageAfterRead(messageId, userId);
     }
 }
