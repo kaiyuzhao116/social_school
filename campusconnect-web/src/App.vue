@@ -98,7 +98,9 @@ onMounted(async () => {
     // 加载通知和消息数据（仅当成功获取用户信息且无错误时）
     if (user && !userStore.error) {
       messageStore.fetchNotifications()
-      messageStore.fetchConversations()
+      // 旧消息模块接口 /messages/conversations 暂时不用，避免一直 500 报错
+      // 新聊天室现在使用 /chat/conversations
+      // messageStore.fetchConversations()
     }
   }
 
