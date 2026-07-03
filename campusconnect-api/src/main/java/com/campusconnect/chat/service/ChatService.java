@@ -1,6 +1,7 @@
 package com.campusconnect.chat.service;
 
 import com.campusconnect.chat.dto.ChatSendMessageDTO;
+import com.campusconnect.chat.vo.ChatMessageReadUserVO;
 import com.campusconnect.chat.vo.ChatMessageVO;
 import com.campusconnect.chat.vo.ChatRoomVO;
 import com.campusconnect.chat.vo.PrivateChatUserVO;
@@ -16,7 +17,9 @@ public interface ChatService {
      * 获取当前用户的聊天室列表
      */
     List<ChatRoomVO> getChatRooms(Long userId);
+    Long getMessageReadCount(Long userId, Long messageId);
 
+    List<ChatMessageReadUserVO> getMessageReadUsers(Long userId, Long messageId);
     /**
      * 获取某个聊天室的历史消息
      */

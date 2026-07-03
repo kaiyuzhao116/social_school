@@ -4,7 +4,9 @@ import com.campusconnect.chat.dto.ChatSendMessageDTO;
 import com.campusconnect.chat.entity.ChatConversation;
 import com.campusconnect.chat.entity.ChatMessage;
 import com.campusconnect.chat.mapper.ChatMapper;
+import com.campusconnect.chat.service.ChatReadBitmapService;
 import com.campusconnect.chat.service.ChatService;
+import com.campusconnect.chat.vo.ChatMessageReadUserVO;
 import com.campusconnect.chat.vo.ChatMessageVO;
 import com.campusconnect.chat.vo.ChatRoomVO;
 import com.campusconnect.chat.vo.PrivateChatUserVO;
@@ -30,6 +32,7 @@ public class ChatServiceImpl implements ChatService {
     private final ChatMapper chatMapper;
     private final ChatWebSocketSessionManager chatWebSocketSessionManager;
     private final ObjectMapper objectMapper;
+    private final ChatReadBitmapService chatReadBitmapService;
     @Override
     public List<ChatRoomVO> getChatRooms(Long userId) {
         return chatMapper.selectChatRoomsByUserId(userId);
@@ -42,15 +45,50 @@ public class ChatServiceImpl implements ChatService {
     @Override
     @Transactional
     public void markConversationRead(Long userId, Long conversationId) {
-        Integer memberCount = chatMapper.countConversationMember(conversationId, userId);
+        if (conversationId == null) {
+            throw new RuntimeException("会话ID不能为空");
+        }
 
+        Integer memberCount = chatMapper.countConversationMember(conversationId, userId);
         if (memberCount == null || memberCount <= 0) {
             throw new RuntimeException("你不在该聊天室中，不能标记已读");
         }
 
         Long latestMessageId = chatMapper.selectLatestMessageId(conversationId);
 
-        chatMapper.markConversationRead(conversationId, userId, latestMessageId);
+        if (latestMessageId == null) {
+            latestMessageId = 0L;
+        }
+
+        chatMapper.markConversationRead(
+                conversationId,
+                userId,
+                latestMessageId
+        );
+
+        if (latestMessageId <= 0) {
+            return;
+        }
+
+        List<Long> messageIds = chatMapper.selectMessageIdsBeforeLatest(
+                conversationId,
+                latestMessageId
+        );
+
+        for (Long messageId : messageIds) {
+            // MySQL：记录谁读了哪条消息
+            chatMapper.insertMessageReadRecord(
+                    messageId,
+                    conversationId,
+                    userId
+            );
+
+            // Redis Bitmap：快速统计这条消息多少人已读
+            chatReadBitmapService.markMessageRead(
+                    messageId,
+                    userId
+            );
+        }
     }
 
     @Override
@@ -140,6 +178,17 @@ public class ChatServiceImpl implements ChatService {
         message.setSendTime(LocalDateTime.now());
 
         chatMapper.insertChatMessage(message);
+        // 发送人自己默认已读
+        chatMapper.insertMessageReadRecord(
+                message.getId(),
+                dto.getConversationId(),
+                userId
+        );
+
+        chatReadBitmapService.markMessageRead(
+                message.getId(),
+                userId
+        );
 
         // 如果是阅后即焚消息，会话列表最后一条不要展示原文
         String lastMessageContent = burnAfterRead == 1
@@ -228,5 +277,33 @@ public class ChatServiceImpl implements ChatService {
         }
 
         chatMapper.burnMessageAfterRead(messageId, userId);
+    }
+
+    @Override
+    public Long getMessageReadCount(Long userId, Long messageId) {
+        if (messageId == null) {
+            throw new RuntimeException("消息ID不能为空");
+        }
+
+        Integer canAccess = chatMapper.countUserCanAccessMessage(messageId, userId);
+        if (canAccess == null || canAccess <= 0) {
+            throw new RuntimeException("你无权查看该消息的已读信息");
+        }
+
+        return chatReadBitmapService.countMessageRead(messageId);
+    }
+
+    @Override
+    public List<ChatMessageReadUserVO> getMessageReadUsers(Long userId, Long messageId) {
+        if (messageId == null) {
+            throw new RuntimeException("消息ID不能为空");
+        }
+
+        Integer canAccess = chatMapper.countUserCanAccessMessage(messageId, userId);
+        if (canAccess == null || canAccess <= 0) {
+            throw new RuntimeException("你无权查看该消息的已读用户");
+        }
+
+        return chatMapper.selectMessageReadUsers(messageId);
     }
 }

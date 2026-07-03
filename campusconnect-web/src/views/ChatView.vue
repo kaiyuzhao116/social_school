@@ -45,6 +45,8 @@
             @fetch-messages="fetchMessages($event.detail[0])"
             @send-message="sendMessage($event.detail[0])"
             @add-room="openPrivateUserDialog"
+            :message-actions="JSON.stringify(messageActions)"
+            @message-action-handler="handleMessageAction($event.detail[0])"
         />
 
         <div v-else class="chat-loading">
@@ -75,6 +77,49 @@
                   </div>
                   <div class="private-user-sub">
                     @{{ user.username }}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-if="showReadDialog" class="private-dialog-mask">
+          <div class="read-dialog">
+            <div class="private-dialog-header">
+              <h3>消息已读详情</h3>
+              <button @click="showReadDialog = false">×</button>
+            </div>
+
+            <div class="read-dialog-body">
+              <div class="read-count-box">
+                已读人数：<strong>{{ readCount }}</strong>
+              </div>
+
+              <div v-if="readLoading" class="read-loading">
+                正在加载已读信息...
+              </div>
+
+              <div v-else-if="readUsers.length === 0" class="read-empty">
+                暂无已读用户
+              </div>
+
+              <div v-else class="read-user-list">
+                <div
+                    v-for="user in readUsers"
+                    :key="user.userId"
+                    class="read-user-item"
+                >
+                  <div class="private-user-avatar">
+                    {{ (user.nickname || user.username || '?').slice(0, 1) }}
+                  </div>
+
+                  <div class="private-user-info">
+                    <div class="private-user-name">
+                      {{ user.nickname || user.username }}
+                    </div>
+                    <div class="private-user-sub">
+                      {{ user.readTime }}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -116,6 +161,18 @@ const burnAfterReadMode = ref(false)
 
 // 防止同一条阅后即焚消息重复触发定时器
 const burnTimerMap = new Map()
+
+const showReadDialog = ref(false)
+const readLoading = ref(false)
+const readCount = ref(0)
+const readUsers = ref([])
+
+const messageActions = ref([
+  {
+    name: 'showReadUsers',
+    title: '查看已读'
+  }
+])
 /**
  * 兼容不同 request 封装返回格式
  */
@@ -681,7 +738,60 @@ onMounted(async () => {
   connectChatWebSocket()
   await loadRooms()
 })
+async function testReadStatus() {
+  if (!messages.value || messages.value.length === 0) {
+    console.warn('当前没有消息，无法查看已读')
+    return
+  }
 
+  const lastMessage = messages.value[messages.value.length - 1]
+
+  await openMessageReadDialog(lastMessage)
+}
+
+async function openMessageReadDialog(message) {
+  if (!message || !message._id) {
+    console.warn('消息为空，无法查看已读')
+    return
+  }
+
+  const messageId = message._id
+
+  showReadDialog.value = true
+  readLoading.value = true
+  readCount.value = 0
+  readUsers.value = []
+
+  console.log('准备查看消息已读详情，messageId =', messageId)
+
+  try {
+    const countRes = await chatApi.getMessageReadCount(messageId)
+    const usersRes = await chatApi.getMessageReadUsers(messageId)
+
+    readCount.value = getObjectData(countRes)
+    readUsers.value = getListData(usersRes)
+
+    console.log('消息已读人数：', readCount.value)
+    console.log('消息已读用户列表：', readUsers.value)
+  } catch (error) {
+    console.error('查询消息已读详情失败：', error)
+    readCount.value = 0
+    readUsers.value = []
+  } finally {
+    readLoading.value = false
+  }
+}
+
+function handleMessageAction(data) {
+  console.log('消息菜单事件：', data)
+
+  const actionName = data?.action?.name || data?.action || data?.name
+  const message = data?.message || data
+
+  if (actionName === 'showReadUsers') {
+    openMessageReadDialog(message)
+  }
+}
 /**
  * 离开页面时关闭 WebSocket
  */
@@ -699,6 +809,7 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+
 .chat-page {
   min-height: calc(100vh - 72px);
   background: #f5f7fb;
@@ -910,5 +1021,80 @@ onBeforeUnmount(() => {
 
 .burn-mode-btn:hover {
   transform: translateY(-1px);
+}
+
+.read-test-btn {
+  height: 40px;
+  padding: 0 16px;
+  border: none;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #16a34a;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 8px 20px rgba(80, 90, 120, 0.08);
+  transition: all 0.2s ease;
+}
+
+.read-test-btn:hover {
+  background: #f0fdf4;
+  transform: translateY(-1px);
+}
+
+.read-dialog {
+  width: 380px;
+  max-height: 520px;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 20px 45px rgba(15, 23, 42, 0.18);
+  overflow: hidden;
+}
+
+.read-dialog-body {
+  padding: 16px;
+}
+
+.read-count-box {
+  height: 44px;
+  border-radius: 12px;
+  background: #f0fdf4;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.read-count-box strong {
+  margin-left: 4px;
+  font-size: 18px;
+}
+
+.read-loading,
+.read-empty {
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b95a7;
+  font-size: 14px;
+}
+
+.read-user-list {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.read-user-item {
+  height: 62px;
+  border-radius: 14px;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+}
+
+.read-user-item:hover {
+  background: #f3f6ff;
 }
 </style>

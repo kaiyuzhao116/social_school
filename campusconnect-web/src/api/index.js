@@ -512,5 +512,13 @@ export const chatApi = {
   // 阅读阅后即焚消息，并触发焚毁
   burnReadMessage(messageId) {
     return request.put(`/chat/messages/${messageId}/burn-read`)
+  },
+
+  getMessageReadCount(messageId) {
+    return request.get(`/chat/messages/${messageId}/read-count`)
+  },
+
+  getMessageReadUsers(messageId) {
+    return request.get(`/chat/messages/${messageId}/read-users`)
   }
 }

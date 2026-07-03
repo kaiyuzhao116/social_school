@@ -123,4 +123,27 @@ public class ChatController {
 
         return Result.success();
     }
+    @GetMapping("/messages/{messageId}/read-count")
+    public Result<?> getMessageReadCount(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Long currentUserId = getCurrentUserId(principal);
+
+        return Result.success(
+                chatService.getMessageReadCount(currentUserId, messageId)
+        );
+    }
+
+    @GetMapping("/messages/{messageId}/read-users")
+    public Result<?> getMessageReadUsers(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserPrincipal principal) {
+
+        Long currentUserId = getCurrentUserId(principal);
+
+        return Result.success(
+                chatService.getMessageReadUsers(currentUserId, messageId)
+        );
+    }
 }

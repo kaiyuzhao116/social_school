@@ -2,6 +2,7 @@ package com.campusconnect.chat.mapper;
 
 import com.campusconnect.chat.entity.ChatConversation;
 import com.campusconnect.chat.entity.ChatMessage;
+import com.campusconnect.chat.vo.ChatMessageReadUserVO;
 import com.campusconnect.chat.vo.ChatMessageVO;
 import com.campusconnect.chat.vo.ChatRoomVO;
 import com.campusconnect.chat.vo.PrivateChatUserVO;
@@ -324,4 +325,46 @@ public interface ChatMapper {
 """)
     ChatRoomVO selectChatRoomByIdAndUserId(@Param("conversationId") Long conversationId,
                                            @Param("userId") Long userId);
+
+    @Select("""
+    SELECT id
+    FROM chat_message
+    WHERE conversation_id = #{conversationId}
+      AND status = 1
+      AND id <= #{latestMessageId}
+    ORDER BY id ASC
+""")
+    List<Long> selectMessageIdsBeforeLatest(@Param("conversationId") Long conversationId,
+                                            @Param("latestMessageId") Long latestMessageId);
+
+    @Insert("""
+    INSERT IGNORE INTO chat_message_read
+    (message_id, conversation_id, user_id, read_time, create_time, update_time)
+    VALUES
+    (#{messageId}, #{conversationId}, #{userId}, NOW(), NOW(), NOW())
+""")
+    int insertMessageReadRecord(@Param("messageId") Long messageId,
+                                @Param("conversationId") Long conversationId,
+                                @Param("userId") Long userId);
+
+    @Select("""
+    SELECT COUNT(1)
+    FROM chat_message_read
+    WHERE message_id = #{messageId}
+""")
+    Integer countMessageReadUsers(@Param("messageId") Long messageId);
+
+    @Select("""
+    SELECT
+        u.id AS userId,
+        u.username AS username,
+        u.nickname AS nickname,
+        DATE_FORMAT(r.read_time, '%Y-%m-%d %H:%i:%s') AS readTime
+    FROM chat_message_read r
+    JOIN user u
+        ON r.user_id = u.id
+    WHERE r.message_id = #{messageId}
+    ORDER BY r.read_time ASC
+""")
+    List<ChatMessageReadUserVO> selectMessageReadUsers(@Param("messageId") Long messageId);
 }

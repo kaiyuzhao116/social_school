@@ -4,6 +4,11 @@ server:
     context-path: /api
 
 spring:
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
   application:
     name: campusconnect-api
   rabbitmq:
