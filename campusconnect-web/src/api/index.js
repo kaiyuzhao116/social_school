@@ -414,6 +414,10 @@ export const mapApi = {
   // 获取地点详情
   getLocationById(id) {
     return request.get(`/map/locations/${id}`)
+  },
+  // 标记会话已读
+  markConversationRead(conversationId) {
+    return request.put(`/chat/conversations/${conversationId}/read`)
   }
 }
 
@@ -472,5 +476,24 @@ export const systemApi = {
   // 反馈
   submitFeedback(data) {
     return request.post('/system/feedback', data)
+  }
+}
+// ========================================
+// 聊天室 API
+// ========================================
+export const chatApi = {
+  // 获取聊天室列表
+  getConversations() {
+    return request.get('/chat/conversations')
+  },
+
+  // 获取某个聊天室历史消息
+  getMessages(conversationId) {
+    return request.get(`/chat/conversations/${conversationId}/messages`)
+  },
+
+  // 发送聊天消息
+  sendMessage(data) {
+    return request.post('/chat/messages', data)
   }
 }

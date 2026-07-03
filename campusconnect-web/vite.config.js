@@ -4,6 +4,7 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '')
+
   return {
     server: {
       port: 3000,
@@ -15,13 +16,21 @@ export default defineConfig(({ mode }) => {
           secure: false,
           configure: (proxy, options) => {
             proxy.on('error', (err, req, res) => {
-              console.log('Proxy error:', err);
-            });
+              console.log('Proxy error:', err)
+            })
+
             proxy.on('proxyReq', (proxyReq, req, res) => {
-              console.log('Proxying:', req.method, req.url, '->', options.target + req.url);
-            });
+              console.log(
+                  'Proxying:',
+                  req.method,
+                  req.url,
+                  '->',
+                  options.target + req.url
+              )
+            })
           }
         },
+
         '/uploads': {
           target: 'http://localhost:8080',
           changeOrigin: true,
@@ -30,7 +39,19 @@ export default defineConfig(({ mode }) => {
         }
       }
     },
-    plugins: [vue()],
+
+    plugins: [
+      vue({
+        template: {
+          compilerOptions: {
+            isCustomElement: (tag) => {
+              return tag === 'vue-advanced-chat' || tag === 'emoji-picker'
+            }
+          }
+        }
+      })
+    ],
+
     resolve: {
       alias: {
         '@': path.resolve(__dirname, 'src')

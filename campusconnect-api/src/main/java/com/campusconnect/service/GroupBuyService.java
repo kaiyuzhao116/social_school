@@ -219,6 +219,8 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
             });
         }
     }
+
+
     /**
      * 发起拼团
      */
@@ -274,6 +276,7 @@ public class GroupBuyService extends ServiceImpl<GroupBuyMapper, GroupBuy> {
      */
     private void runAfterCommit(Runnable task) {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            //给当前事务注册一个监听器
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
                 public void afterCommit() {
