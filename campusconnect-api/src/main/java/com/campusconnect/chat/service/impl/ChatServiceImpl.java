@@ -6,12 +6,16 @@ import com.campusconnect.chat.mapper.ChatMapper;
 import com.campusconnect.chat.service.ChatService;
 import com.campusconnect.chat.vo.ChatMessageVO;
 import com.campusconnect.chat.vo.ChatRoomVO;
+import com.campusconnect.chat.websocket.ChatWebSocketSessionManager;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -19,7 +23,8 @@ import java.util.UUID;
 public class ChatServiceImpl implements ChatService {
 
     private final ChatMapper chatMapper;
-
+    private final ChatWebSocketSessionManager chatWebSocketSessionManager;
+    private final ObjectMapper objectMapper;
     @Override
     public List<ChatRoomVO> getChatRooms(Long userId) {
         return chatMapper.selectChatRoomsByUserId(userId);
@@ -81,6 +86,32 @@ public class ChatServiceImpl implements ChatService {
 
         chatMapper.increaseUnreadCount(dto.getConversationId(), userId);
 
-        return chatMapper.selectMessageById(message.getId());
+        ChatMessageVO messageVO = chatMapper.selectMessageById(message.getId());
+
+// WebSocket 推送给其他在线成员
+        pushMessageToOnlineMembers(dto.getConversationId(), userId, messageVO);
+
+        return messageVO;
+    }
+    /**
+     * 推送消息给聊天室其他在线成员
+     */
+    private void pushMessageToOnlineMembers(Long conversationId, Long senderId, ChatMessageVO messageVO) {
+        try {
+            List<Long> receiverIds = chatMapper.selectOtherMemberIds(conversationId, senderId);
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("type", "CHAT_MESSAGE");
+            payload.put("data", messageVO);
+
+            String json = objectMapper.writeValueAsString(payload);
+
+            for (Long receiverId : receiverIds) {
+                chatWebSocketSessionManager.sendToUser(receiverId, json);
+            }
+        } catch (Exception e) {
+            // WebSocket 推送失败不能影响消息落库
+            System.err.println("WebSocket 推送失败：" + e.getMessage());
+        }
     }
 }

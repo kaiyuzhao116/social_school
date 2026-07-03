@@ -137,7 +137,18 @@ public interface ChatMapper {
       AND status = 1
 """)
     Long selectLatestMessageId(@Param("conversationId") Long conversationId);
-
+    /**
+     * 查询会话内除发送人之外的成员ID
+     */
+    @Select("""
+    SELECT user_id
+    FROM chat_conversation_member
+    WHERE conversation_id = #{conversationId}
+      AND user_id <> #{senderId}
+      AND status = 1
+""")
+    List<Long> selectOtherMemberIds(@Param("conversationId") Long conversationId,
+                                    @Param("senderId") Long senderId);
 
     /**
      * 标记会话已读

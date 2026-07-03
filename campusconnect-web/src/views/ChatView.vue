@@ -5,6 +5,11 @@
         <div>
           <h1>校园聊天室</h1>
           <p>拼团沟通、学习交流、校园闲聊</p>
+
+          <!-- 临时调试用：确认当前登录用户 ID，确认没问题后可以删掉 -->
+          <span class="debug-user-id">
+            当前用户ID：{{ currentUserId || '加载中' }}
+          </span>
         </div>
 
         <button class="back-btn" @click="router.push('/')">
@@ -14,6 +19,8 @@
 
       <div class="chat-box">
         <vue-advanced-chat
+            v-if="currentUserId && currentUserId !== 'undefined'"
+            :key="`chat-${currentUserId}`"
             height="calc(100vh - 190px)"
             :current-user-id="currentUserId"
             :rooms="JSON.stringify(rooms)"
@@ -24,24 +31,30 @@
             @fetch-messages="fetchMessages($event.detail[0])"
             @send-message="sendMessage($event.detail[0])"
         />
+
+        <div v-else class="chat-loading">
+          正在加载用户信息...
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { register } from 'vue-advanced-chat'
-import { chatApi,userApi } from '@/api'
+import { chatApi, userApi } from '@/api'
 
 register()
 
 const router = useRouter()
 
-// 目前后端写死的是 admin，id = 1，所以前端这里也先写死 1
-//const currentUserId = '5'
+// 当前登录用户 ID，由 userApi.getCurrentUser() 动态获取
 const currentUserId = ref('')
+
+// WebSocket 连接对象
+const chatSocket = ref(null)
 
 const rooms = ref([])
 const messages = ref([])
@@ -61,24 +74,143 @@ function getListData(res) {
   return []
 }
 
+/**
+ * 兼容不同 request 封装返回格式
+ */
 function getObjectData(res) {
   if (res?.data?.data) return res.data.data
   if (res?.data) return res.data
   return res
 }
+
+/**
+ * 从当前用户对象中尽量提取用户 ID
+ */
+function extractUserId(user) {
+  return (
+      user?.id ||
+      user?.userId ||
+      user?.uid ||
+      user?.user?.id ||
+      user?.user?.userId ||
+      user?.userInfo?.id ||
+      user?.userInfo?.userId ||
+      user?.profile?.id ||
+      user?.profile?.userId
+  )
+}
+
+/**
+ * 加载当前登录用户
+ */
 async function loadCurrentUser() {
   try {
     const res = await userApi.getCurrentUser()
     const user = getObjectData(res)
 
-    currentUserId.value = String(user.id)
+    console.log('当前登录用户完整数据：', user)
+
+    const id = extractUserId(user)
+
+    if (!id) {
+      console.error('没有从当前用户接口里拿到用户ID：', user)
+      currentUserId.value = ''
+      return
+    }
+
+    currentUserId.value = String(id)
 
     console.log('当前登录用户ID：', currentUserId.value)
   } catch (error) {
     console.error('获取当前用户失败：', error)
+    currentUserId.value = ''
   }
-}onMounted()
+}
 
+/**
+ * 建立 WebSocket 连接
+ */
+function connectChatWebSocket() {
+  if (!currentUserId.value || currentUserId.value === 'undefined') {
+    console.warn('当前用户ID为空，暂不连接 WebSocket')
+    return
+  }
+
+  const wsUrl = `ws://localhost:8080/api/ws/chat?userId=${currentUserId.value}`
+
+  chatSocket.value = new WebSocket(wsUrl)
+
+  chatSocket.value.onopen = () => {
+    console.log('WebSocket 连接成功')
+  }
+
+  chatSocket.value.onmessage = async (event) => {
+    console.log('收到 WebSocket 消息：', event.data)
+
+    try {
+      const payload = JSON.parse(event.data)
+
+      if (payload.type === 'CONNECTED') {
+        return
+      }
+
+      if (payload.type === 'CHAT_MESSAGE') {
+        handleWebSocketChatMessage(payload.data)
+      }
+    } catch (error) {
+      console.error('解析 WebSocket 消息失败：', error)
+    }
+  }
+
+  chatSocket.value.onerror = (error) => {
+    console.error('WebSocket 连接异常：', error)
+  }
+
+  chatSocket.value.onclose = () => {
+    console.log('WebSocket 已断开')
+  }
+}
+/**
+ * 处理 WebSocket 推送过来的聊天消息
+ */
+function handleWebSocketChatMessage(message) {
+  if (!message || !message.messageId) {
+    return
+  }
+
+  const roomId = String(message.conversationId)
+
+  updateRoomLastMessage(roomId, message)
+
+  // 如果当前正打开这个聊天室，就直接追加到消息列表
+  if (String(currentRoomId.value) === roomId) {
+    const exists = messages.value.some(
+        item => String(item._id) === String(message.messageId)
+    )
+
+    if (!exists) {
+      messages.value = [
+        ...messages.value,
+        convertMessage(message)
+      ]
+    }
+
+    markRoomRead(roomId)
+    return
+  }
+
+  // 如果不是当前聊天室，就给左侧未读数 +1
+  rooms.value = rooms.value.map(room => {
+    if (room.roomId !== roomId) {
+      return room
+    }
+
+    return {
+      ...room,
+      unreadCount: (room.unreadCount || 0) + 1
+    }
+  })
+}
 /**
  * 后端聊天室列表 -> vue-advanced-chat rooms
  */
@@ -191,6 +323,7 @@ async function loadMessages(roomId) {
     const list = getListData(res)
 
     messages.value = list.map(convertMessage)
+
     await markRoomRead(roomId)
   } catch (error) {
     console.error('加载聊天消息失败：', error)
@@ -199,6 +332,7 @@ async function loadMessages(roomId) {
     messagesLoaded.value = true
   }
 }
+
 /**
  * 标记当前聊天室已读，并更新左侧未读数
  */
@@ -206,7 +340,7 @@ async function markRoomRead(roomId) {
   try {
     await chatApi.markConversationRead(roomId)
 
-    rooms.value = rooms.value.map(room => {
+    rooms.value = rooms.value.map((room) => {
       if (room.roomId !== String(roomId)) {
         return room
       }
@@ -281,7 +415,7 @@ async function sendMessage(data) {
  * 更新左侧会话列表最后一条消息
  */
 function updateRoomLastMessage(roomId, message) {
-  rooms.value = rooms.value.map(room => {
+  rooms.value = rooms.value.map((room) => {
     if (room.roomId !== String(roomId)) {
       return room
     }
@@ -314,9 +448,28 @@ function createClientMsgId() {
   return `msg-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
+/**
+ * 页面初始化
+ */
 onMounted(async () => {
   await loadCurrentUser()
+
+  if (!currentUserId.value || currentUserId.value === 'undefined') {
+    console.error('当前用户ID无效，停止加载聊天室')
+    return
+  }
+
+  connectChatWebSocket()
   await loadRooms()
+})
+
+/**
+ * 离开页面时关闭 WebSocket
+ */
+onBeforeUnmount(() => {
+  if (chatSocket.value) {
+    chatSocket.value.close()
+  }
 })
 </script>
 
@@ -353,6 +506,13 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+.debug-user-id {
+  display: inline-block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8b95a7;
+}
+
 .back-btn {
   height: 40px;
   padding: 0 18px;
@@ -378,5 +538,14 @@ onMounted(async () => {
   overflow: hidden;
   box-shadow: 0 12px 32px rgba(80, 90, 120, 0.13);
   border: 1px solid #edf0f7;
+}
+
+.chat-loading {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8b95a7;
+  font-size: 14px;
 }
 </style>

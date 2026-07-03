@@ -76,6 +76,7 @@ public class SecurityConfig {
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "MODERATOR")
                         //如果你本地想先把拼团所有操作都放开测试，也可以临时写：
                         .requestMatchers("/group-buys/**").permitAll()
+                        .requestMatchers("/ws/**").permitAll()
                         //.requestMatchers("/chat/**").permitAll()
                         // 其他需要认证
                         .anyRequest().authenticated())
