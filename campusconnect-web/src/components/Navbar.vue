@@ -11,14 +11,18 @@
             @click="navigateTo('/')"
           >
             <div
-              class="w-8 h-8 bg-brand-purple rounded-lg flex items-center justify-center text-white font-bold text-xl"
+                class="w-9 h-9 bg-gradient-to-br from-sky-500 to-cyan-500 rounded-xl flex items-center justify-center text-white font-black text-lg shadow-md shadow-sky-200"
             >
-              C
+              渤
             </div>
-            <span
-              class="font-bold text-xl tracking-tight text-gray-900 dark:text-white block"
-              >校园连接</span
-            >
+            <div class="flex flex-col leading-tight">
+  <span class="font-bold text-lg tracking-tight text-gray-900 dark:text-white block">
+    渤大校园脉动
+  </span>
+              <span class="text-[10px] text-sky-500 font-semibold hidden lg:block">
+    Bohai University Life Hub
+  </span>
+            </div>
           </div>
 
           <!-- Desktop Menu -->
@@ -50,7 +54,7 @@
             <input
               type="text"
               class="block w-full pl-9 pr-3 py-2 border border-gray-200 dark:border-gray-700 rounded-full leading-5 bg-gray-50 dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:bg-white dark:focus:bg-gray-700 focus:ring-2 focus:ring-brand-purple focus:border-brand-purple text-sm transition-all"
-              placeholder="搜索..."
+              placeholder="搜索渤大动态、拼团、活动..."
               v-model="searchTerm"
               @keydown.enter="handleSearch"
             />

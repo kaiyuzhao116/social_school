@@ -8,7 +8,7 @@
       <PlusCircle
           class="w-5 h-5 group-hover:rotate-90 transition-transform"
       />
-      创建帖子
+      发布渤大动态
     </button>
 
     <!-- 2. Chat Entry -->
@@ -22,7 +22,7 @@
           class="text-brand-purple text-sm font-medium mb-4 flex items-center gap-2"
       >
         <Flame class="w-4 h-4 text-orange-500" />
-        热门动态 Top 10
+        渤大热榜 Top 10
       </h3>
       <div class="space-y-4">
         <div

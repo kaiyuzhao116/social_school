@@ -14,10 +14,13 @@
           </div>
           <div class="flex flex-col">
             <span class="font-bold text-gray-900 dark:text-white leading-tight"
-              >CampusConnect</span
+              >渤大校园</span
             >
+            <p class="mt-2 text-xs text-gray-400">
+              网站仍在不断完善中，感谢你的体验与建议。
+            </p>
             <span class="text-[10px] text-gray-400 tracking-wider uppercase"
-              >校园生活助手</span
+              >面向渤海大学的校园生活互助平台</span
             >
           </div>
         </div>
