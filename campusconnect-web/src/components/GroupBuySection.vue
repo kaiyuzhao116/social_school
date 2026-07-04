@@ -229,8 +229,10 @@
             <label class="text-xs font-bold text-gray-500">截止时间</label>
             <input
                 v-model="form.deadline"
+                type="datetime-local"
+                :min="minDeadline"
+                step="60"
                 class="mt-2 w-full bg-gray-50 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-200"
-                placeholder="YYYY-MM-DD HH:MM"
             />
           </div>
         </div>
@@ -369,7 +371,13 @@ const formatTime = (value) => {
   if (!value) return '暂无'
   return String(value).replace('T', ' ').slice(0, 16)
 }
+const getLocalDateTimeValue = (date = new Date()) => {
+  const pad = (n) => String(n).padStart(2, '0')
 
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+
+const minDeadline = getLocalDateTimeValue()
 const formatDateTime = (value) => {
   if (!value) return null
 
@@ -445,6 +453,9 @@ const handleRealtimeUpdate = (event) => {
 }
 
 const openCreateModal = () => {
+  const defaultDeadline = new Date()
+  defaultDeadline.setHours(defaultDeadline.getHours() + 1)
+
   form.value = {
     title: '',
     description: '',
@@ -452,11 +463,11 @@ const openCreateModal = () => {
     targetCount: 3,
     location: '',
     contactInfo: '',
-    deadline: ''
+    deadline: getLocalDateTimeValue(defaultDeadline)
   }
+
   isModalOpen.value = true
 }
-
 const closeModal = () => {
   isModalOpen.value = false
 }
