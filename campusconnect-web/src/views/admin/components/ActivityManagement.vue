@@ -127,7 +127,7 @@
               </label>
               <input
                   v-model="form.startTime"
-                  placeholder="YYYY-MM-DD HH:MM"
+                  type="datetime-local"
                   class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-sage-200"
               />
             </div>
@@ -173,7 +173,7 @@
               </label>
               <input
                   v-model="form.endTime"
-                  placeholder="YYYY-MM-DD HH:MM"
+                  type="datetime-local"
                   class="w-full bg-slate-50 border-none rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-sage-200"
               />
             </div>
@@ -270,7 +270,10 @@ const formatShowTime = (value) => {
   if (!value) return ''
   return String(value).replace('T', ' ').slice(0, 16)
 }
-
+const formatInputTime = (value) => {
+  if (!value) return ''
+  return String(value).replace(' ', 'T').slice(0, 16)
+}
 const mapActivity = (a) => {
   return {
     id: a.id,
@@ -308,7 +311,11 @@ onMounted(() => {
 
 const openModal = (act) => {
   if (act) {
-    form.value = { ...act }
+    form.value = {
+      ...act,
+      startTime: formatInputTime(act.startTime),
+      endTime: formatInputTime(act.endTime)
+    }
   } else {
     form.value = {
       title: '',
@@ -325,7 +332,6 @@ const openModal = (act) => {
 
   isModalOpen.value = true
 }
-
 const closeModal = () => {
   isModalOpen.value = false
   form.value = {}
