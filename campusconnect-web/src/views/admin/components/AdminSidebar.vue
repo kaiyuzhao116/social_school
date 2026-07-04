@@ -45,7 +45,19 @@
 </template>
 
 <script setup>
-import { LayoutGrid, CheckCircle, ShieldAlert, Users, Flag, LogOut, Megaphone, FileText, Calendar, Search } from 'lucide-vue-next'
+import {
+  LayoutGrid,
+  Gauge,
+  CheckCircle,
+  ShieldAlert,
+  Users,
+  Flag,
+  LogOut,
+  Megaphone,
+  FileText,
+  Calendar,
+  Search
+} from 'lucide-vue-next'
 import { ViewState } from '../types'
 
 defineProps({
@@ -59,6 +71,7 @@ defineEmits(['navigate', 'logout'])
 
 const menuItems = [
   { id: ViewState.DASHBOARD, icon: LayoutGrid, label: '数据看板' },
+  { id: ViewState.TRAFFIC_CONTROL, icon: Gauge, label: '系统流控' },
   { id: ViewState.VERIFICATION, icon: CheckCircle, label: '身份认证' },
   { id: ViewState.POST_MANAGEMENT, icon: FileText, label: '帖子管理' },
   { id: ViewState.MODERATION, icon: ShieldAlert, label: '内容审核' },

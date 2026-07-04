@@ -126,8 +126,17 @@
       </div>
 
       <!-- Scrollable Content -->
+      <!-- Scrollable Content -->
       <div class="flex-1 overflow-hidden relative rounded-t-[2.5rem] p-1">
-        <AdminDashboard v-if="currentView === ViewState.DASHBOARD" @navigate="handleNavigate" />
+        <AdminDashboard
+            v-if="currentView === ViewState.DASHBOARD"
+            @navigate="handleNavigate"
+        />
+
+        <TrafficControlManagement
+            v-else-if="currentView === ViewState.TRAFFIC_CONTROL"
+        />
+
         <PostModeration v-else-if="currentView === ViewState.MODERATION" />
         <Verification v-else-if="currentView === ViewState.VERIFICATION" />
         <UserManagement v-else-if="currentView === ViewState.USERS" />
@@ -136,6 +145,7 @@
         <PostManagement v-else-if="currentView === ViewState.POST_MANAGEMENT" />
         <ActivityManagement v-else-if="currentView === ViewState.ACTIVITIES" />
         <LostFoundManagement v-else-if="currentView === ViewState.LOST_FOUND" />
+
         <AdminDashboard v-else @navigate="handleNavigate" />
       </div>
     </main>
@@ -222,7 +232,7 @@ import { ref, onMounted, watch } from 'vue'
 import { Search, Bell, X, Camera, Save, Loader2, Lock } from 'lucide-vue-next'
 import { ViewState } from './types'
 import { dataService } from './services/dataService'
-
+import TrafficControlManagement from './components/TrafficControlManagement.vue'
 import AdminSidebar from './components/AdminSidebar.vue'
 import AdminDashboard from './components/AdminDashboard.vue'
 import PostModeration from './components/PostModeration.vue'
