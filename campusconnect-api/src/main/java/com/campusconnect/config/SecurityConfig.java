@@ -77,9 +77,29 @@ public class SecurityConfig {
                         //如果你本地想先把拼团所有操作都放开测试，也可以临时写：
                         .requestMatchers("/group-buys/**").permitAll()
                         .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/activities/**").permitAll()
+                        // 活动报名 - 登录用户才能报名
+                        .requestMatchers("/activities/*/join").authenticated()
                         //.requestMatchers("/chat/**").permitAll()
+                        .requestMatchers("/activities/**").permitAll()
+                        .requestMatchers("/activities/**").authenticated()
+                        .requestMatchers( "/events/**").permitAll()
+                        .requestMatchers( "/events/*/register").authenticated()
+                        .requestMatchers("/events/*/register").authenticated()
+                        .requestMatchers("/events/*/register").authenticated()
+                        .requestMatchers( "/events/*/register").authenticated()
+                        // 活动接口
+                        .requestMatchers(HttpMethod.GET, "/events/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/activities/**").permitAll()
+
+// 活动报名、取消报名：登录用户即可
+                        .requestMatchers(HttpMethod.POST, "/events/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/events/**").authenticated()
+                        .requestMatchers(HttpMethod.POST, "/activities/**").authenticated()
+                        .requestMatchers(HttpMethod.DELETE, "/activities/**").authenticated()
                         // 其他需要认证
                         .anyRequest().authenticated())
+
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

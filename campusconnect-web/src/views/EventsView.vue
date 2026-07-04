@@ -108,9 +108,18 @@
             </div>
 
             <button
-                class="flex items-center gap-1 text-sm font-bold text-brand-purple hover:text-indigo-600 transition-colors"
+                @click="handleRegister(event)"
+                :disabled="event.category !== '报名中' || (event.maxAttendees > 0 && event.attendees >= event.maxAttendees)"
+                class="flex items-center gap-1 text-sm font-bold text-brand-purple hover:text-indigo-600 transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
             >
-              立即报名 <ArrowRight class="w-4 h-4" />
+              {{
+                event.category !== '报名中'
+                    ? event.category
+                    : event.maxAttendees > 0 && event.attendees >= event.maxAttendees
+                        ? '名额已满'
+                        : '立即报名'
+              }}
+              <ArrowRight class="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -126,7 +135,34 @@ import request from '../api/request'
 
 const events = ref([])
 const isLoading = ref(false)
+const handleRegister = async (event) => {
+  if (event.category !== '报名中') {
+    alert('当前活动不在报名中')
+    return
+  }
 
+  if (event.maxAttendees > 0 && event.attendees >= event.maxAttendees) {
+    alert('活动名额已满')
+    return
+  }
+
+  try {
+    await request.post(`/events/${event.id}/register`)
+
+    alert('报名成功')
+
+    // 重新加载活动列表，刷新报名人数
+    await loadEvents()
+  } catch (e) {
+    console.error('报名失败:', e)
+
+    alert(
+        e.response?.data?.message ||
+        e.response?.data?.msg ||
+        '报名失败，请检查是否已登录或是否已经报名'
+    )
+  }
+}
 const statusToCategory = (status) => {
   if (status === 'REGISTERING' || status === '报名中') return '报名中'
   if (status === 'ONGOING' || status === '进行中') return '进行中'
