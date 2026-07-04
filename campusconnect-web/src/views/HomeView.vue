@@ -8,7 +8,7 @@
     <!-- Main Feed -->
     <div class="flex-1 min-w-0">
       <Hero />
-      <GroupBuySection />
+
       <Feed />
     </div>
   </div>
@@ -18,5 +18,5 @@
 import Sidebar from '../components/Sidebar.vue'
 import Hero from '../components/Hero.vue'
 import Feed from '../components/Feed.vue'
-import GroupBuySection from '../components/GroupBuySection.vue'
+
 </script>
