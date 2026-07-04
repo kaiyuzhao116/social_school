@@ -1,207 +1,311 @@
 <template>
-  <div
-    class="h-[calc(100vh-140px)] w-full flex flex-col md:flex-row gap-4 animate-in fade-in duration-500"
-  >
-    <!-- Sidebar / Filter Panel -->
-    <div
-      class="w-full md:w-80 bg-white dark:bg-gray-800 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-700 p-4 flex flex-col z-10"
-    >
-      <div class="relative mb-4">
-        <input
-          type="text"
-          placeholder="搜索地点..."
-          class="w-full bg-gray-50 dark:bg-gray-700 border-none rounded-xl py-3 pl-10 pr-4 text-sm focus:ring-2 focus:ring-brand-purple"
-        />
-        <Search class="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+  <div class="map-coming-page animate-in fade-in duration-500">
+    <div class="map-card">
+      <div class="map-bg-grid"></div>
+      <div class="float-pin pin-one">
+        <MapPin class="w-5 h-5" />
+      </div>
+      <div class="float-pin pin-two">
+        <Navigation class="w-5 h-5" />
+      </div>
+      <div class="float-pin pin-three">
+        <Compass class="w-5 h-5" />
       </div>
 
-      <div
-        class="flex flex-row md:flex-col gap-2 overflow-x-auto md:overflow-visible pb-2 md:pb-0 no-scrollbar"
-      >
-        <button
-          v-for="filter in filters"
-          :key="filter.id"
-          @click="activeFilter = filter.id"
-          :class="[
-            'flex items-center gap-3 px-4 py-3 rounded-xl transition-all text-sm font-medium whitespace-nowrap',
-            activeFilter === filter.id
-              ? 'bg-brand-purple text-white shadow-md'
-              : 'bg-gray-50 dark:bg-gray-700/50 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-          ]"
-        >
-          <component :is="filter.icon" class="w-4 h-4" />
-          {{ filter.label }}
-        </button>
+      <div class="main-icon">
+        <Map class="w-11 h-11" />
       </div>
 
-      <div
-        class="mt-4 flex-1 overflow-y-auto hidden md:block custom-scrollbar"
-      >
-        <h3
-          class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2"
-        >
-          热门地点
-        </h3>
-        <div class="space-y-2">
-          <div
-            v-for="loc in filteredLocations"
-            :key="loc.id"
-            class="flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer border border-transparent hover:border-gray-100 dark:hover:border-gray-700 transition-colors group"
-          >
-            <div class="flex items-center gap-3">
-              <div
-                :class="[
-                  'w-8 h-8 rounded-full flex items-center justify-center text-white',
-                  loc.color
-                ]"
-              >
-                <component :is="loc.icon" class="w-4 h-4" />
-              </div>
-              <span
-                class="text-sm font-medium text-gray-700 dark:text-gray-200"
-                >{{ loc.name }}</span
-              >
-            </div>
-            <Navigation
-              class="w-4 h-4 text-gray-300 group-hover:text-brand-purple"
-            />
-          </div>
+      <div class="status-badge">
+        <Sparkles class="w-4 h-4" />
+        校园地图建设中
+      </div>
+
+      <h1>敬请期待</h1>
+
+      <p class="desc">
+        校园地图、地点搜索、路线导航、教学楼与宿舍定位等功能正在开发中。
+        后续将接入真实校园数据，为你提供更准确的校园导航体验。
+      </p>
+
+      <div class="feature-list">
+        <div class="feature-item">
+          <Search class="w-4 h-4" />
+          <span>地点搜索</span>
         </div>
-      </div>
-    </div>
 
-    <!-- Map Area -->
-    <div
-      class="flex-1 bg-blue-50 dark:bg-gray-900 rounded-2xl relative overflow-hidden shadow-inner border border-gray-200 dark:border-gray-700 group"
-    >
-      <!-- Mock Map Background -->
-      <div
-        class="absolute inset-0 opacity-20 dark:opacity-10 bg-[url('https://upload.wikimedia.org/wikipedia/commons/thumb/e/ec/Campus_map.jpg/800px-Campus_map.jpg')] bg-cover bg-center"
-      ></div>
-      <div
-        class="absolute inset-0 bg-[radial-gradient(#cbd5e1_1px,transparent_1px)] [background-size:16px_16px] opacity-50"
-      ></div>
+        <div class="feature-item">
+          <Navigation class="w-4 h-4" />
+          <span>路线导航</span>
+        </div>
 
-      <!-- Pins -->
-      <div
-        v-for="loc in filteredLocations"
-        :key="loc.id"
-        class="absolute transform -translate-x-1/2 -translate-y-1/2 cursor-pointer group/pin hover:z-20 transition-all duration-300"
-        :style="{ left: `${loc.x}%`, top: `${loc.y}%` }"
-      >
-        <div class="relative flex flex-col items-center">
-          <div
-            :class="[
-              'w-10 h-10 rounded-full shadow-lg flex items-center justify-center text-white group-hover/pin:scale-125 transition-transform duration-300 ring-4 ring-white dark:ring-gray-800',
-              loc.color
-            ]"
-          >
-            <component :is="loc.icon" class="w-5 h-5" />
-          </div>
-          <div
-            class="absolute top-12 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-1.5 rounded-lg shadow-xl text-xs font-bold whitespace-nowrap opacity-0 group-hover/pin:opacity-100 transition-opacity transform translate-y-2 group-hover/pin:translate-y-0 pointer-events-none"
-          >
-            {{ loc.name }}
-            <div
-              class="absolute -top-1.5 left-1/2 -translate-x-1/2 w-3 h-3 bg-white dark:bg-gray-800 transform rotate-45"
-            ></div>
-          </div>
+        <div class="feature-item">
+          <MapPin class="w-4 h-4" />
+          <span>校园点位</span>
         </div>
       </div>
 
-      <!-- Controls -->
-      <div class="absolute bottom-6 right-6 flex flex-col gap-2">
-        <button
-          class="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex items-center justify-center text-gray-600 dark:text-gray-300 hover:text-brand-purple"
-        >
-          <Navigation class="w-5 h-5 transform rotate-45" />
-        </button>
-        <button
-          class="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex items-center justify-center text-xl font-bold text-gray-600 dark:text-gray-300 hover:text-brand-purple"
-        >
-          +
-        </button>
-        <button
-          class="w-10 h-10 bg-white dark:bg-gray-800 rounded-lg shadow-lg flex items-center justify-center text-xl font-bold text-gray-600 dark:text-gray-300 hover:text-brand-purple"
-        >
-          -
-        </button>
-      </div>
+      <button class="back-btn" @click="goHome">
+        返回首页
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, markRaw } from 'vue'
+import { useRouter } from 'vue-router'
 import {
+  Map,
   MapPin,
   Navigation,
+  Compass,
   Search,
-  Coffee,
-  Book,
-  Utensils,
-  Home
+  Sparkles
 } from 'lucide-vue-next'
 
-const activeFilter = ref('all')
+const router = useRouter()
 
-const locations = [
-  {
-    id: 1,
-    name: '中心图书馆',
-    type: 'study',
-    x: 40,
-    y: 30,
-    icon: markRaw(Book),
-    color: 'bg-blue-500'
-  },
-  {
-    id: 2,
-    name: '第一食堂',
-    type: 'food',
-    x: 60,
-    y: 50,
-    icon: markRaw(Utensils),
-    color: 'bg-orange-500'
-  },
-  {
-    id: 3,
-    name: '瑞幸咖啡',
-    type: 'cafe',
-    x: 25,
-    y: 60,
-    icon: markRaw(Coffee),
-    color: 'bg-amber-700'
-  },
-  {
-    id: 4,
-    name: '东区宿舍 A栋',
-    type: 'dorm',
-    x: 75,
-    y: 20,
-    icon: markRaw(Home),
-    color: 'bg-purple-500'
-  },
-  {
-    id: 5,
-    name: '行政楼',
-    type: 'office',
-    x: 50,
-    y: 45,
-    icon: markRaw(MapPin),
-    color: 'bg-gray-500'
-  }
-]
-
-const filters = [
-  { id: 'all', label: '全部', icon: markRaw(MapPin) },
-  { id: 'study', label: '学习', icon: markRaw(Book) },
-  { id: 'food', label: '餐饮', icon: markRaw(Utensils) },
-  { id: 'dorm', label: '宿舍', icon: markRaw(Home) }
-]
-
-const filteredLocations = computed(() => {
-  if (activeFilter.value === 'all') return locations
-  return locations.filter((l) => l.type === activeFilter.value)
-})
+const goHome = () => {
+  router.push('/')
+}
 </script>
+
+<style scoped>
+.map-coming-page {
+  min-height: calc(100vh - 140px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 42px 16px;
+}
+
+.map-card {
+  position: relative;
+  width: 100%;
+  max-width: 780px;
+  min-height: 520px;
+  border-radius: 34px;
+  overflow: hidden;
+  text-align: center;
+  padding: 64px 48px;
+  box-sizing: border-box;
+
+  background:
+      radial-gradient(circle at 20% 18%, rgba(99, 102, 241, 0.22), transparent 28%),
+      radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.22), transparent 30%),
+      linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
+
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+      0 26px 80px rgba(79, 86, 110, 0.15),
+      inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.dark .map-card {
+  background:
+      radial-gradient(circle at 20% 18%, rgba(99, 102, 241, 0.28), transparent 28%),
+      radial-gradient(circle at 80% 20%, rgba(14, 165, 233, 0.24), transparent 30%),
+      linear-gradient(180deg, #111827 0%, #0f172a 100%);
+
+  border-color: rgba(55, 65, 81, 0.9);
+  box-shadow: 0 26px 80px rgba(0, 0, 0, 0.36);
+}
+
+.map-bg-grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+      linear-gradient(rgba(148, 163, 184, 0.16) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(148, 163, 184, 0.16) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(circle at center, black, transparent 75%);
+  opacity: 0.8;
+}
+
+.main-icon {
+  position: relative;
+  z-index: 2;
+  width: 92px;
+  height: 92px;
+  margin: 0 auto 24px;
+  border-radius: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+
+  background: linear-gradient(135deg, #6366f1, #3b82f6, #06b6d4);
+  box-shadow:
+      0 20px 45px rgba(59, 130, 246, 0.38),
+      inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+.status-badge {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.11);
+  margin-bottom: 18px;
+}
+
+.dark .status-badge {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.18);
+}
+
+h1 {
+  position: relative;
+  z-index: 2;
+  margin: 0;
+  font-size: 46px;
+  line-height: 1.15;
+  font-weight: 900;
+  color: #111827;
+  letter-spacing: 2px;
+}
+
+.dark h1 {
+  color: #ffffff;
+}
+
+.desc {
+  position: relative;
+  z-index: 2;
+  max-width: 560px;
+  margin: 18px auto 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #6b7280;
+}
+
+.dark .desc {
+  color: #cbd5e1;
+}
+
+.feature-list {
+  position: relative;
+  z-index: 2;
+  margin: 32px auto 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 15px;
+  border-radius: 15px;
+  font-size: 13px;
+  font-weight: 800;
+  color: #374151;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  backdrop-filter: blur(10px);
+}
+
+.dark .feature-item {
+  color: #e5e7eb;
+  background: rgba(31, 41, 55, 0.72);
+  border-color: rgba(75, 85, 99, 0.78);
+}
+
+.back-btn {
+  position: relative;
+  z-index: 2;
+  margin-top: 36px;
+  height: 44px;
+  padding: 0 28px;
+  border: none;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  box-shadow: 0 13px 28px rgba(59, 130, 246, 0.33);
+  transition: all 0.22s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 17px 35px rgba(59, 130, 246, 0.45);
+}
+
+.back-btn:active {
+  transform: translateY(0);
+}
+
+.float-pin {
+  position: absolute;
+  z-index: 1;
+  width: 42px;
+  height: 42px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  opacity: 0.85;
+  animation: float 3s ease-in-out infinite;
+}
+
+.pin-one {
+  left: 16%;
+  top: 22%;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+.pin-two {
+  right: 18%;
+  top: 26%;
+  background: linear-gradient(135deg, #3b82f6, #06b6d4);
+  animation-delay: 0.5s;
+}
+
+.pin-three {
+  left: 22%;
+  bottom: 20%;
+  background: linear-gradient(135deg, #f97316, #ef4444);
+  animation-delay: 0.9s;
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@media (max-width: 640px) {
+  .map-card {
+    padding: 44px 24px;
+    min-height: 480px;
+    border-radius: 28px;
+  }
+
+  h1 {
+    font-size: 36px;
+  }
+
+  .desc {
+    font-size: 14px;
+  }
+
+  .float-pin {
+    display: none;
+  }
+}
+</style>

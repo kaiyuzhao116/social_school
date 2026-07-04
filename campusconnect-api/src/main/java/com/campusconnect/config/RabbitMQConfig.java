@@ -66,6 +66,13 @@ public class RabbitMQConfig {
      * 消息进入这个队列后不会被消费者直接消费。
      * 等消息 TTL 到期后，会通过死信交换机转发到过期检查队列。
      */
+
+    public static final String GROUP_BUY_CHAT_QUEUE = "group.buy.chat.queue";
+
+    @Bean
+    public Queue groupBuyChatQueue() {
+        return QueueBuilder.durable(GROUP_BUY_CHAT_QUEUE).build();
+    }
     @Bean
     public Queue groupBuyExpireDelayQueue() {
         return QueueBuilder.durable(GROUP_BUY_EXPIRE_DELAY_QUEUE)
@@ -117,6 +124,21 @@ public class RabbitMQConfig {
                 .bind(groupBuyNotificationQueue)
                 .to(campusEventExchange)
                 .with("groupbuy.*");
+    }
+
+    /**
+     * 群聊模块只监听拼团成功事件
+     * 拼团成功后自动创建群聊
+     */
+    @Bean
+    public Binding groupBuyChatBinding(
+            Queue groupBuyChatQueue,
+            TopicExchange campusEventExchange
+    ) {
+        return BindingBuilder
+                .bind(groupBuyChatQueue)
+                .to(campusEventExchange)
+                .with(GROUP_BUY_SUCCESS_KEY);
     }
 
     /**

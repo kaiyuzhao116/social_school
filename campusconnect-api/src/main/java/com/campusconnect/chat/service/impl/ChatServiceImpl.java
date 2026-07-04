@@ -20,10 +20,7 @@ import com.campusconnect.chat.mq.ChatMessageProducer;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -278,7 +275,53 @@ public class ChatServiceImpl implements ChatService {
 
         chatMapper.burnMessageAfterRead(messageId, userId);
     }
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long createGroupConversation(Long ownerId, String name, Collection<Long> memberIds) {
+        if (ownerId == null) {
+            throw new RuntimeException("群主不能为空");
+        }
 
+        if (name == null || name.trim().isEmpty()) {
+            name = "群聊";
+        }
+
+        // 用 Set 去重，避免发起人重复加入
+        Set<Long> userIds = new LinkedHashSet<>();
+        userIds.add(ownerId);
+
+        if (memberIds != null) {
+            for (Long userId : memberIds) {
+                if (userId != null) {
+                    userIds.add(userId);
+                }
+            }
+        }
+
+        if (userIds.isEmpty()) {
+            throw new RuntimeException("群聊成员不能为空");
+        }
+
+        // 1. 创建群聊会话
+        ChatConversation conversation = new ChatConversation();
+        conversation.setType(2); // 1 私聊，2 群聊
+        conversation.setPrivateKey(null);
+        conversation.setName(name);
+        conversation.setOwnerId(ownerId);
+        conversation.setStatus(1);
+
+        chatMapper.insertChatConversation(conversation);
+
+        Long conversationId = conversation.getId();
+
+        // 2. 添加群聊成员
+        for (Long userId : userIds) {
+            int role = userId.equals(ownerId) ? 1 : 2; // 1 群主，2 成员
+            chatMapper.insertConversationMember(conversationId, userId, role);
+        }
+
+        return conversationId;
+    }
     @Override
     public Long getMessageReadCount(Long userId, Long messageId) {
         if (messageId == null) {

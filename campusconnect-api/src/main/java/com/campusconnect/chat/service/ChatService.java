@@ -9,6 +9,13 @@ import com.campusconnect.chat.vo.PrivateChatUserVO;
 import java.util.List;
 
 public interface ChatService {
+
+    Long createGroupConversation(
+            Long ownerId,
+            String name,
+            java.util.Collection<Long> memberIds
+    );
+
     /**
      * 标记会话已读
      */

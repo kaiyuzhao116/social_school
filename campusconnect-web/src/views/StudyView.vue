@@ -1,219 +1,258 @@
 <template>
-  <div class="space-y-8 animate-in fade-in duration-500">
-    <!-- Empty Classroom Finder -->
-    <section>
-      <div class="flex justify-between items-center mb-4">
-        <h2
-          class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"
-        >
-          <Clock class="w-5 h-5 text-brand-purple" /> 自习室状态
-        </h2>
-        <span class="text-xs text-gray-500">实时更新: 刚刚</span>
+  <div class="coming-soon-page animate-in fade-in duration-500">
+    <div class="coming-card">
+      <div class="icon-wrap">
+        <BookOpen class="w-10 h-10" />
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div
-          v-for="room in classrooms"
-          :key="room.id"
-          class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm text-center"
-        >
-          <h3 class="font-bold text-gray-900 dark:text-white mb-1">
-            {{ room.id }}
-          </h3>
-          <div
-            :class="[
-              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mb-2',
-              room.status === 'empty'
-                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
-                : room.status === 'busy'
-                  ? 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400'
-                  : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-            ]"
-          >
-            <span
-              :class="[
-                'w-1.5 h-1.5 rounded-full',
-                room.status === 'empty'
-                  ? 'bg-green-500'
-                  : room.status === 'busy'
-                    ? 'bg-orange-500'
-                    : 'bg-red-500'
-              ]"
-            ></span>
-            {{
-              room.status === 'empty'
-                ? '空闲'
-                : room.status === 'busy'
-                  ? '有课'
-                  : '拥挤'
-            }}
-          </div>
-          <p class="text-[10px] text-gray-400">下节课: {{ room.nextClass }}</p>
-        </div>
-      </div>
-    </section>
 
-    <!-- Learning Resources -->
-    <section>
-      <div class="flex justify-between items-center mb-4">
-        <h2
-          class="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2"
-        >
-          <BookOpen class="w-5 h-5 text-blue-500" /> 学习资料库
-        </h2>
-        <div class="relative">
-          <input
-            type="text"
-            placeholder="搜索资料..."
-            class="pl-8 pr-4 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-full focus:ring-1 focus:ring-brand-purple w-48"
-          />
-          <Search class="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+      <div class="badge">
+        <Sparkles class="w-4 h-4" />
+        学习模块建设中
+      </div>
+
+      <h1>敬请期待</h1>
+
+      <p class="desc">
+        学习资料库、自习室状态、学习搭子等功能正在开发中。
+        后续将接入真实数据，为你提供更实用的校园学习服务。
+      </p>
+
+      <div class="feature-list">
+        <div class="feature-item">
+          <Clock class="w-4 h-4" />
+          <span>自习室状态</span>
+        </div>
+
+        <div class="feature-item">
+          <Download class="w-4 h-4" />
+          <span>学习资料共享</span>
+        </div>
+
+        <div class="feature-item">
+          <Users class="w-4 h-4" />
+          <span>学习小组</span>
         </div>
       </div>
 
-      <div class="grid grid-cols-1 gap-4">
-        <div
-          v-for="res in resources"
-          :key="res.id"
-          class="bg-white dark:bg-gray-800 p-4 rounded-xl border border-gray-100 dark:border-gray-700 shadow-sm flex items-center justify-between group hover:border-brand-purple/30 transition-colors"
-        >
-          <div class="flex items-center gap-4">
-            <div
-              :class="[
-                'w-10 h-10 rounded-lg flex items-center justify-center font-bold text-xs',
-                res.type === 'PDF'
-                  ? 'bg-red-50 text-red-600 dark:bg-red-900/20'
-                  : res.type === 'DOCX'
-                    ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/20'
-                    : 'bg-green-50 text-green-600 dark:bg-green-900/20'
-              ]"
-            >
-              {{ res.type }}
-            </div>
-            <div>
-              <h3
-                class="font-bold text-gray-900 dark:text-white text-sm mb-0.5 group-hover:text-brand-purple transition-colors"
-              >
-                {{ res.title }}
-              </h3>
-              <div class="flex items-center gap-3 text-xs text-gray-400">
-                <span>{{ res.size }}</span>
-                <span>•</span>
-                <span>贡献者: {{ res.author }}</span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            class="flex items-center gap-1 text-xs font-medium text-gray-500 hover:text-brand-purple bg-gray-50 dark:bg-gray-700 hover:bg-brand-purple/10 px-3 py-1.5 rounded-lg transition-colors"
-          >
-            <Download class="w-3.5 h-3.5" /> {{ res.downloads }}
-          </button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Online Courses / Groups -->
-    <section class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div
-        class="bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl p-6 text-white relative overflow-hidden"
-      >
-        <div
-          class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl"
-        ></div>
-        <div class="relative z-10">
-          <div
-            class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mb-4"
-          >
-            <Video class="w-5 h-5 text-white" />
-          </div>
-          <h3 class="font-bold text-lg mb-1">精品网课推荐</h3>
-          <p class="text-indigo-100 text-sm mb-4">
-            校内名师录播课程，涵盖通识课与专业核心课。
-          </p>
-          <button
-            class="bg-white text-brand-purple px-4 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-gray-50 transition-colors"
-          >
-            去观看
-          </button>
-        </div>
-      </div>
-
-      <div
-        class="bg-gradient-to-br from-orange-400 to-pink-500 rounded-2xl p-6 text-white relative overflow-hidden"
-      >
-        <div
-          class="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-8 -mt-8 blur-2xl"
-        ></div>
-        <div class="relative z-10">
-          <div
-            class="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center mb-4"
-          >
-            <UsersIcon class="w-5 h-5 text-white" />
-          </div>
-          <h3 class="font-bold text-lg mb-1">寻找学习搭子</h3>
-          <p class="text-orange-100 text-sm mb-4">
-            加入考研、雅思或编程学习小组，共同进步。
-          </p>
-          <button
-            class="bg-white text-orange-600 px-4 py-2 rounded-lg text-sm font-bold shadow-lg hover:bg-gray-50 transition-colors"
-          >
-            加入小组
-          </button>
-        </div>
-      </div>
-    </section>
+      <button class="back-btn" @click="goHome">
+        先去首页看看
+      </button>
+    </div>
   </div>
 </template>
 
 <script setup>
+import { useRouter } from 'vue-router'
 import {
   BookOpen,
-  Download,
   Clock,
-  Search,
-  Users as UsersIcon,
-  Video
+  Download,
+  Users,
+  Sparkles
 } from 'lucide-vue-next'
 
-const resources = [
-  {
-    id: 1,
-    title: '高等数学(下) 期末复习重点',
-    type: 'PDF',
-    size: '2.4MB',
-    downloads: 1205,
-    author: '数学系学生会'
-  },
-  {
-    id: 2,
-    title: 'C++ 程序设计 - 往年真题解析',
-    type: 'DOCX',
-    size: '1.1MB',
-    downloads: 890,
-    author: '张明'
-  },
-  {
-    id: 3,
-    title: '宏观经济学笔记整理 (全)',
-    type: 'PDF',
-    size: '5.6MB',
-    downloads: 450,
-    author: '李伊桑'
-  },
-  {
-    id: 4,
-    title: '大学物理实验数据处理模板',
-    type: 'XLSX',
-    size: '0.5MB',
-    downloads: 2300,
-    author: '物理社'
-  }
-]
+const router = useRouter()
 
-const classrooms = [
-  { id: '3A-101', status: 'empty', capacity: 120, nextClass: '14:00' },
-  { id: '3A-102', status: 'busy', capacity: 80, nextClass: '15:30' },
-  { id: '3B-204', status: 'empty', capacity: 40, nextClass: '16:00' },
-  { id: 'Lib-4F', status: 'crowded', capacity: 200, nextClass: '全天开放' }
-]
+const goHome = () => {
+  router.push('/')
+}
 </script>
+
+<style scoped>
+.coming-soon-page {
+  min-height: calc(100vh - 180px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+.coming-card {
+  position: relative;
+  width: 100%;
+  max-width: 720px;
+  padding: 56px 48px;
+  border-radius: 32px;
+  text-align: center;
+  overflow: hidden;
+
+  background:
+      radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.22), transparent 30%),
+      radial-gradient(circle at 85% 20%, rgba(59, 130, 246, 0.2), transparent 32%),
+      linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow:
+      0 24px 70px rgba(79, 86, 110, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.dark .coming-card {
+  background:
+      radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.28), transparent 30%),
+      radial-gradient(circle at 85% 20%, rgba(59, 130, 246, 0.22), transparent 32%),
+      linear-gradient(180deg, #111827 0%, #0f172a 100%);
+
+  border-color: rgba(55, 65, 81, 0.9);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+
+.coming-card::before {
+  content: '';
+  position: absolute;
+  width: 220px;
+  height: 220px;
+  left: -80px;
+  bottom: -90px;
+  border-radius: 50%;
+  background: rgba(99, 102, 241, 0.12);
+  filter: blur(4px);
+}
+
+.coming-card::after {
+  content: '';
+  position: absolute;
+  width: 160px;
+  height: 160px;
+  right: -60px;
+  top: -60px;
+  border-radius: 50%;
+  background: rgba(6, 182, 212, 0.16);
+  filter: blur(4px);
+}
+
+.icon-wrap {
+  position: relative;
+  z-index: 1;
+  width: 86px;
+  height: 86px;
+  margin: 0 auto 22px;
+  border-radius: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #ffffff;
+  background: linear-gradient(135deg, #6366f1, #3b82f6, #06b6d4);
+  box-shadow: 0 18px 38px rgba(59, 130, 246, 0.35);
+}
+
+.badge {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #4f46e5;
+  background: rgba(99, 102, 241, 0.1);
+  margin-bottom: 18px;
+}
+
+.dark .badge {
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.18);
+}
+
+h1 {
+  position: relative;
+  z-index: 1;
+  font-size: 44px;
+  line-height: 1.15;
+  font-weight: 900;
+  color: #111827;
+  margin: 0;
+  letter-spacing: 2px;
+}
+
+.dark h1 {
+  color: #ffffff;
+}
+
+.desc {
+  position: relative;
+  z-index: 1;
+  max-width: 520px;
+  margin: 18px auto 0;
+  font-size: 15px;
+  line-height: 1.9;
+  color: #6b7280;
+}
+
+.dark .desc {
+  color: #cbd5e1;
+}
+
+.feature-list {
+  position: relative;
+  z-index: 1;
+  margin: 30px auto 0;
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #374151;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.dark .feature-item {
+  color: #e5e7eb;
+  background: rgba(31, 41, 55, 0.72);
+  border-color: rgba(75, 85, 99, 0.75);
+}
+
+.back-btn {
+  position: relative;
+  z-index: 1;
+  margin-top: 34px;
+  height: 44px;
+  padding: 0 26px;
+  border: none;
+  border-radius: 999px;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #3b82f6);
+  box-shadow: 0 12px 26px rgba(59, 130, 246, 0.32);
+  transition: all 0.22s ease;
+}
+
+.back-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(59, 130, 246, 0.42);
+}
+
+.back-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 640px) {
+  .coming-card {
+    padding: 42px 24px;
+    border-radius: 26px;
+  }
+
+  h1 {
+    font-size: 36px;
+  }
+
+  .desc {
+    font-size: 14px;
+  }
+}
+</style>
