@@ -162,7 +162,7 @@ public class PostController {
             post.setShareCount(0);
             post.setViewCount(0);
             postService.save(post);
-
+            postService.deleteHotPostsCache();
             // 重新从数据库获取以确保获取自动填充的字段（如 createdAt）
             post = postService.getById(post.getId());
 
@@ -207,6 +207,7 @@ public class PostController {
                     : null);
             post.setIsAnonymous(request.getIsAnonymous() != null && request.getIsAnonymous());
             postService.updateById(post);
+            postService.deleteHotPostsCache();
 
             // 填充作者信息
             User author = userService.getById(principal.getId());
@@ -240,6 +241,7 @@ public class PostController {
         if (principal == null)
             return Result.error("请先登录");
         postLikeService.likePost(principal.getId(), id);
+        postService.deleteHotPostsCache();
         return Result.success();
     }
 
@@ -248,12 +250,14 @@ public class PostController {
         if (principal == null)
             return Result.error("请先登录");
         postLikeService.unlikePost(principal.getId(), id);
+        postService.deleteHotPostsCache();
         return Result.success();
     }
 
     @PostMapping("/{id}/share")
     public Result<?> sharePost(@PathVariable Long id) {
         postService.lambdaUpdate().eq(Post::getId, id).setSql("share_count = share_count + 1").update();
+        postService.deleteHotPostsCache();
         return Result.success();
     }
 

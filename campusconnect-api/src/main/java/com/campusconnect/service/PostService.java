@@ -1,30 +1,151 @@
 package com.campusconnect.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.campusconnect.entity.Post;
 import com.campusconnect.entity.User;
 import com.campusconnect.mapper.PostMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
+import java.time.Duration;
 import java.util.List;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
 public class PostService extends ServiceImpl<PostMapper, Post> {
     private final UserService userService;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final ObjectMapper objectMapper;
 
-    public IPage<Post> getPosts(int page, int size, String status) {
-        Page<Post> p = new Page<>(page, size);
-        IPage<Post> result = lambdaQuery()
-                .eq(status != null, Post::getStatus, status)
-                .orderByDesc(Post::getIsPinned)
+    private static final String HOT_POST_CACHE_KEY_PREFIX = "post:hot:top:";
+    private static final String HOT_POST_LOCK_KEY_PREFIX = "lock:post:hot:top:";
+
+    private static final String UNLOCK_LUA = """
+            if redis.call('GET', KEYS[1]) == ARGV[1] then
+                return redis.call('DEL', KEYS[1])
+            else
+                return 0
+            end
+            """;
+    public List<Post> getHotPosts(int limit) {
+        if (limit <= 0) {
+            limit = 10;
+        }
+        limit = Math.min(limit, 50);
+
+        String cacheKey = HOT_POST_CACHE_KEY_PREFIX + limit;
+        String lockKey = HOT_POST_LOCK_KEY_PREFIX + limit;
+
+        // 1. 先查缓存
+        List<Post> cachedPosts = getHotPostsFromCache(cacheKey);
+        if (cachedPosts != null) {
+            return cachedPosts;
+        }
+
+        String lockValue = UUID.randomUUID().toString();
+
+        // 2. 尝试获取互斥锁，防止缓存失效瞬间大量请求同时查库
+        Boolean locked = stringRedisTemplate.opsForValue()
+                .setIfAbsent(lockKey, lockValue, Duration.ofSeconds(10));
+
+        // 3. 没抢到锁，说明有其他线程正在查库并回写缓存
+        if (!Boolean.TRUE.equals(locked)) {
+            try {
+                TimeUnit.MILLISECONDS.sleep(80);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+
+            // 再查一次缓存
+            cachedPosts = getHotPostsFromCache(cacheKey);
+            if (cachedPosts != null) {
+                return cachedPosts;
+            }
+
+            // 兜底：缓存仍未生成时直接查库，但不负责回写缓存
+            return queryHotPostsFromDb(limit);
+        }
+
+        try {
+            // 4. 拿到锁后再次检查缓存，避免重复查库
+            cachedPosts = getHotPostsFromCache(cacheKey);
+            if (cachedPosts != null) {
+                return cachedPosts;
+            }
+
+            // 5. 只有拿到锁的线程查询 MySQL
+            List<Post> dbPosts = queryHotPostsFromDb(limit);
+
+            // 6. 回写 Redis
+            stringRedisTemplate.opsForValue().set(
+                    cacheKey,
+                    objectMapper.writeValueAsString(dbPosts),
+                    Duration.ofMinutes(5)
+            );
+
+            return dbPosts;
+        } catch (Exception e) {
+            throw new RuntimeException("查询热门动态失败", e);
+        } finally {
+            // 7. Lua 释放锁，防止误删其他线程的锁
+            DefaultRedisScript<Long> unlockScript = new DefaultRedisScript<>();
+            unlockScript.setScriptText(UNLOCK_LUA);
+            unlockScript.setResultType(Long.class);
+
+            stringRedisTemplate.execute(
+                    unlockScript,
+                    List.of(lockKey),
+                    lockValue
+            );
+        }
+    }
+    private List<Post> getHotPostsFromCache(String cacheKey) {
+        try {
+            String json = stringRedisTemplate.opsForValue().get(cacheKey);
+
+            if (!StringUtils.hasText(json)) {
+                return null;
+            }
+
+            return objectMapper.readValue(json, new TypeReference<List<Post>>() {});
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private List<Post> queryHotPostsFromDb(int limit) {
+        List<Post> posts = lambdaQuery()
+                .eq(Post::getStatus, "PUBLISHED")
+                .orderByDesc(Post::getLikeCount)
+                .orderByDesc(Post::getCommentCount)
+                .orderByDesc(Post::getShareCount)
                 .orderByDesc(Post::getCreatedAt)
-                .page(p);
-        fillAuthor(result.getRecords());
-        return result;
+                .last("LIMIT " + limit)
+                .list();
+
+        fillAuthor(posts);
+        return posts;
+    }
+
+    /**
+     * 帖子数据变更后删除热门动态缓存
+     */
+    public void deleteHotPostsCache() {
+        Set<String> keys = stringRedisTemplate.keys(HOT_POST_CACHE_KEY_PREFIX + "*");
+
+        if (keys != null && !keys.isEmpty()) {
+            stringRedisTemplate.delete(keys);
+        }
     }
 
     public IPage<Post> getPendingPosts(int page, int size) {
@@ -41,16 +162,18 @@ public class PostService extends ServiceImpl<PostMapper, Post> {
         fillAuthor(result.getRecords());
         return result;
     }
+    public IPage<Post> getPosts(int page, int size, String status) {
+        Page<Post> p = new Page<>(page, size);
+        IPage<Post> result = lambdaQuery()
+                .eq(status != null, Post::getStatus, status)
+                .orderByDesc(Post::getIsPinned)
+                .orderByDesc(Post::getCreatedAt)
+                .page(p);
 
-    public List<Post> getHotPosts(int limit) {
-        List<Post> posts = lambdaQuery()
-                .eq(Post::getStatus, "PUBLISHED")
-                .orderByDesc(Post::getLikeCount)
-                .last("LIMIT " + limit)
-                .list();
-        fillAuthor(posts);
-        return posts;
+        fillAuthor(result.getRecords());
+        return result;
     }
+
 
     /**
      * 个性化推荐帖子
@@ -122,12 +245,14 @@ public class PostService extends ServiceImpl<PostMapper, Post> {
     public void moderate(Long postId, String action) {
         String status = "approve".equals(action) ? "PUBLISHED" : "REJECTED";
         lambdaUpdate().eq(Post::getId, postId).set(Post::getStatus, status).update();
+        deleteHotPostsCache();
     }
 
     public void togglePin(Long postId) {
         Post post = getById(postId);
         if (post != null) {
             lambdaUpdate().eq(Post::getId, postId).set(Post::getIsPinned, !post.getIsPinned()).update();
+            deleteHotPostsCache();
         }
     }
 
