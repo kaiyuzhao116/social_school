@@ -9,9 +9,14 @@ import com.campusconnect.entity.ActivityRegistration;
 import com.campusconnect.mapper.ActivityMapper;
 import com.campusconnect.mapper.ActivityRegistrationMapper;
 import lombok.RequiredArgsConstructor;
+import org.redisson.api.RedissonClient;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
+import org.redisson.api.RLock;
+import java.util.concurrent.TimeUnit;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -20,6 +25,41 @@ import java.util.List;
 public class ActivityService extends ServiceImpl<ActivityMapper, Activity> {
 
     private final ActivityRegistrationMapper activityRegistrationMapper;
+    private final StringRedisTemplate stringRedisTemplate;
+    private final RedissonClient redissonClient;
+
+    private static final String REGISTER_LUA = """
+    local stockKey = KEYS[1]
+    local userSetKey = KEYS[2]
+    local userId = ARGV[1]
+
+    local stock = tonumber(redis.call('GET', stockKey) or '0')
+
+    if stock <= 0 then
+        return 1
+    end
+
+    if redis.call('SISMEMBER', userSetKey, userId) == 1 then
+        return 2
+    end
+
+    redis.call('DECR', stockKey)
+    redis.call('SADD', userSetKey, userId)
+
+    return 0
+    """;
+
+    private String stockKey(Long activityId) {
+        return "activity:stock:" + activityId;
+    }
+
+    private String userSetKey(Long activityId) {
+        return "activity:users:" + activityId;
+    }
+
+    private String userLockKey(Long activityId, Long userId) {
+        return "lock:activity:" + activityId + ":user:" + userId;
+    }
 
     public List<Activity> getAllActivities() {
         return lambdaQuery()
@@ -49,50 +89,175 @@ public class ActivityService extends ServiceImpl<ActivityMapper, Activity> {
                 .set(Activity::getStatus, status)
                 .update();
     }
+    private void initRedisStockIfAbsent(Long activityId) {
+        String stockKey = stockKey(activityId);
+        String userSetKey = userSetKey(activityId);
 
+        if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(stockKey))) {
+            return;
+        }
+
+        RLock initLock = redissonClient.getLock("lock:activity:init:" + activityId);
+
+        try {
+            initLock.lock(5, TimeUnit.SECONDS);
+
+            if (Boolean.TRUE.equals(stringRedisTemplate.hasKey(stockKey))) {
+                return;
+            }
+
+            Activity activity = baseMapper.selectById(activityId);
+            if (activity == null) {
+                throw new RuntimeException("活动不存在");
+            }
+
+            Integer max = activity.getMaxParticipants();
+            Integer current = activity.getParticipantCount();
+
+            int stock = Math.max((max == null ? 0 : max) - (current == null ? 0 : current), 0);
+
+            stringRedisTemplate.opsForValue().set(stockKey, String.valueOf(stock));
+
+            List<ActivityRegistration> registrations = activityRegistrationMapper.selectList(
+                    new LambdaQueryWrapper<ActivityRegistration>()
+                            .eq(ActivityRegistration::getActivityId, activityId)
+            );
+
+            if (registrations != null && !registrations.isEmpty()) {
+                String[] userIds = registrations.stream()
+                        .map(ActivityRegistration::getUserId)
+                        .map(String::valueOf)
+                        .toArray(String[]::new);
+
+                stringRedisTemplate.opsForSet().add(userSetKey, userIds);
+            }
+
+        } finally {
+            if (initLock.isHeldByCurrentThread()) {
+                initLock.unlock();
+            }
+        }
+    }
+    private void rollbackRedisRegister(Long activityId, Long userId) {
+        stringRedisTemplate.opsForValue().increment(stockKey(activityId));
+        stringRedisTemplate.opsForSet().remove(userSetKey(activityId), String.valueOf(userId));
+    }
     @Transactional(rollbackFor = Exception.class)
     public boolean registerUser(Long activityId, Long userId) {
-        Long count = activityRegistrationMapper.selectCount(
-                new LambdaQueryWrapper<ActivityRegistration>()
-                        .eq(ActivityRegistration::getActivityId, activityId)
-                        .eq(ActivityRegistration::getUserId, userId)
+        // 1. 初始化 Redis 库存和已报名用户集合
+        initRedisStockIfAbsent(activityId);
+
+        String stockKey = stockKey(activityId);
+        String userSetKey = userSetKey(activityId);
+
+        // 2. 执行 Lua 脚本，原子判断库存和重复报名
+        DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+        script.setScriptText(REGISTER_LUA);
+        script.setResultType(Long.class);
+
+        Long luaResult = stringRedisTemplate.execute(
+                script,
+                List.of(stockKey, userSetKey),
+                String.valueOf(userId)
         );
 
-        if (count != null && count > 0) {
+        if (luaResult == null) {
             return false;
         }
 
-        ActivityRegistration registration = new ActivityRegistration();
-        registration.setActivityId(activityId);
-        registration.setUserId(userId);
-        registration.setCreatedAt(LocalDateTime.now());
-
-        activityRegistrationMapper.insert(registration);
-
-        int updated = baseMapper.increaseParticipantCount(activityId);
-
-        if (updated == 0) {
-            throw new RuntimeException("活动名额已满或活动不在报名阶段");
+        // 1 = 库存不足
+        if (luaResult == 1) {
+            return false;
         }
 
-        return true;
+        // 2 = 用户已报名
+        if (luaResult == 2) {
+            return false;
+        }
+
+        // 3. Redisson 锁：控制同一用户同一活动并发操作
+        RLock lock = redissonClient.getLock(userLockKey(activityId, userId));
+        boolean locked = false;
+
+        try {
+            locked = lock.tryLock(3, 10, TimeUnit.SECONDS);
+
+            if (!locked) {
+                rollbackRedisRegister(activityId, userId);
+                return false;
+            }
+
+            // 4. 插入 MySQL 报名记录
+            ActivityRegistration registration = new ActivityRegistration();
+            registration.setActivityId(activityId);
+            registration.setUserId(userId);
+            registration.setCreatedAt(LocalDateTime.now());
+
+            activityRegistrationMapper.insert(registration);
+
+            // 5. MySQL 条件更新人数，最终兜底防超卖
+            int updated = baseMapper.increaseParticipantCount(activityId);
+
+            if (updated == 0) {
+                rollbackRedisRegister(activityId, userId);
+                throw new RuntimeException("活动名额已满或活动不在报名阶段");
+            }
+
+            return true;
+
+        } catch (DuplicateKeyException e) {
+            // MySQL 唯一索引兜底：activity_id + user_id 重复
+            rollbackRedisRegister(activityId, userId);
+            return false;
+        } catch (Exception e) {
+            rollbackRedisRegister(activityId, userId);
+            throw new RuntimeException("报名失败", e);
+        } finally {
+            if (locked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
+        }
     }
 
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public boolean unregisterUser(Long activityId, Long userId) {
-        int deleted = activityRegistrationMapper.delete(
-                new LambdaQueryWrapper<ActivityRegistration>()
-                        .eq(ActivityRegistration::getActivityId, activityId)
-                        .eq(ActivityRegistration::getUserId, userId)
-        );
+        initRedisStockIfAbsent(activityId);
 
-        if (deleted <= 0) {
-            return false;
+        RLock lock = redissonClient.getLock(userLockKey(activityId, userId));
+        boolean locked = false;
+
+        try {
+            locked = lock.tryLock(3, 10, TimeUnit.SECONDS);
+
+            if (!locked) {
+                return false;
+            }
+
+            int deleted = activityRegistrationMapper.delete(
+                    new LambdaQueryWrapper<ActivityRegistration>()
+                            .eq(ActivityRegistration::getActivityId, activityId)
+                            .eq(ActivityRegistration::getUserId, userId)
+            );
+
+            if (deleted <= 0) {
+                return false;
+            }
+
+            baseMapper.decreaseParticipantCount(activityId);
+
+            // MySQL 取消成功后，同步恢复 Redis 库存和报名集合
+            stringRedisTemplate.opsForValue().increment(stockKey(activityId));
+            stringRedisTemplate.opsForSet().remove(userSetKey(activityId), String.valueOf(userId));
+
+            return true;
+
+        } catch (Exception e) {
+            throw new RuntimeException("取消报名失败", e);
+        } finally {
+            if (locked && lock.isHeldByCurrentThread()) {
+                lock.unlock();
+            }
         }
-
-        baseMapper.decreaseParticipantCount(activityId);
-
-        return true;
     }
 
     public IPage<Activity> getUserRegisteredActivities(Long userId, int page, int size) {
