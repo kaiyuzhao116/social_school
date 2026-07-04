@@ -164,14 +164,12 @@ const removeCard = (id) => {
 }
 
 const handleView = () => {
-  // 现在先滚动到学生拼团区域，后面如果你有详情页，可以改成跳转详情页
-  const title = Array.from(document.querySelectorAll('h2'))
-      .find(el => el.innerText.includes('学生拼团'))
+  const section = document.getElementById('group-buy-section')
 
-  if (title) {
-    title.scrollIntoView({
+  if (section) {
+    section.scrollIntoView({
       behavior: 'smooth',
-      block: 'center'
+      block: 'start'
     })
   }
 }

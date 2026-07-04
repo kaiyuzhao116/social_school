@@ -73,6 +73,7 @@ public class SecurityConfig {
                         .requestMatchers("/messages/**").authenticated()
                         .requestMatchers("/group-buy-live/**").permitAll()
                         // 管理员接口
+                        .requestMatchers("/admin/dynamic-config/**").permitAll()
                         .requestMatchers("/admin/**").hasAnyRole("ADMIN", "MODERATOR")
                         //如果你本地想先把拼团所有操作都放开测试，也可以临时写：
                         .requestMatchers("/group-buys/**").permitAll()

@@ -13,6 +13,11 @@ const routes = [
     component: () => import('../views/ChatView.vue')
   },
   {
+    path: '/group-buy',
+    name: 'GroupBuy',
+    component: () => import('../views/GroupBuyView.vue')
+  },
+  {
     path: '/events',
     name: 'events',
     component: () => import('../views/EventsView.vue')

@@ -1,5 +1,8 @@
 <template>
-  <div class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mt-6 mb-6">
+  <div
+      id="group-buy-section"
+      class="bg-white rounded-3xl shadow-sm border border-gray-100 p-6 mt-6 mb-6 scroll-mt-24"
+  >
     <div class="flex items-center justify-between mb-5">
       <div>
         <h2 class="text-xl font-bold text-gray-900">学生拼团</h2>

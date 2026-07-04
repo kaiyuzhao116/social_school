@@ -280,6 +280,7 @@ const searchTerm = ref('')
 const navItems = [
   { id: 'HOME', label: '首页', path: '/' },
   { id: 'EVENTS', label: '活动', path: '/events' },
+  { id: 'GROUP_BUY', label: '拼团', path: '/group-buy' },
   { id: 'STUDY', label: '学习', path: '/study' },
   { id: 'MAP', label: '地图', path: '/map' }
 ]
