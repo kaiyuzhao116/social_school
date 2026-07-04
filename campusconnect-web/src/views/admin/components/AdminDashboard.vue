@@ -31,7 +31,7 @@
               社区活跃度趋势
               <TrendingUp :size="18" class="text-sage-600"/>
             </h3>
-            <p class="text-sm text-slate-500 mt-1 font-medium">实时访问量监控 (每3秒刷新)</p>
+            <p class="text-sm text-slate-500 mt-1 font-medium">真实访问量监控（每3秒从后端刷新）</p>
           </div>
           <button class="p-2.5 bg-white/50 hover:bg-white rounded-xl transition-colors text-slate-400 hover:text-sage-600">
             <ArrowUpRight class="w-5 h-5" />
@@ -178,19 +178,6 @@ const contentStats = ref([])
 const isLive = ref(true)
 let interval = null
 
-
-const maxContentPosts = computed(() => {
-  if (contentStats.value.length === 0) return 100
-  return Math.max(...contentStats.value.map(i => i.posts)) * 1.2
-})
-
-const maxVisits = computed(() => {
-  if (chartData.value.length === 0) return 100
-  return Math.max(...chartData.value.map(i => i.visits)) * 1.1
-})
-
-
-// 从API获取的统计数据
 const stats = ref({
   userCount: 0,
   postCount: 0,
@@ -199,87 +186,109 @@ const stats = ref({
   pendingPosts: 0
 })
 
+const maxContentPosts = computed(() => {
+  if (contentStats.value.length === 0) return 100
+  return Math.max(...contentStats.value.map(i => Number(i.posts || 0))) * 1.2
+})
+
+const maxVisits = computed(() => {
+  if (chartData.value.length === 0) return 100
+  return Math.max(...chartData.value.map(i => Number(i.visits || 0))) * 1.1
+})
+
 const quickStats = computed(() => [
-  { 
-    label: '总用户数', 
-    value: stats.value.userCount.toLocaleString(), 
-    icon: Users, 
-    color: 'text-blue-600', 
-    bg: 'bg-blue-100', 
-    trend: '', 
-    onClick: () => emit('navigate', ViewState.USERS) 
+  {
+    label: '总用户数',
+    value: stats.value.userCount.toLocaleString(),
+    icon: Users,
+    color: 'text-blue-600',
+    bg: 'bg-blue-100',
+    trend: '',
+    onClick: () => emit('navigate', ViewState.USERS)
   },
-  { 
-    label: '帖子总数', 
-    value: stats.value.postCount.toLocaleString(), 
-    icon: FileText, 
-    color: 'text-purple-600', 
-    bg: 'bg-purple-100', 
-    trend: '', 
-    onClick: () => emit('navigate', ViewState.POST_MANAGEMENT) 
+  {
+    label: '帖子总数',
+    value: stats.value.postCount.toLocaleString(),
+    icon: FileText,
+    color: 'text-purple-600',
+    bg: 'bg-purple-100',
+    trend: '',
+    onClick: () => emit('navigate', ViewState.POST_MANAGEMENT)
   },
-  { 
-    label: '待审核认证', 
-    value: stats.value.pendingVerifications.toString(), 
-    icon: Activity, 
-    color: 'text-sage-600', 
-    bg: 'bg-sage-100', 
-    trend: stats.value.pendingVerifications > 0 ? '需处理' : '', 
-    onClick: () => emit('navigate', ViewState.VERIFICATION) 
+  {
+    label: '待审核认证',
+    value: stats.value.pendingVerifications.toString(),
+    icon: Activity,
+    color: 'text-sage-600',
+    bg: 'bg-sage-100',
+    trend: stats.value.pendingVerifications > 0 ? '需处理' : '',
+    onClick: () => emit('navigate', ViewState.VERIFICATION)
   },
-  { 
-    label: '待处理举报', 
-    value: stats.value.pendingReports.toString(), 
-    icon: AlertTriangle, 
-    color: 'text-orange-600', 
-    bg: 'bg-orange-100', 
-    trend: stats.value.pendingReports > 0 ? '需处理' : '', 
-    onClick: () => emit('navigate', ViewState.REPORTS) 
-  },
+  {
+    label: '待处理举报',
+    value: stats.value.pendingReports.toString(),
+    icon: AlertTriangle,
+    color: 'text-orange-600',
+    bg: 'bg-orange-100',
+    trend: stats.value.pendingReports > 0 ? '需处理' : '',
+    onClick: () => emit('navigate', ViewState.REPORTS)
+  }
 ])
 
-onMounted(async () => {
-  // 获取统计数据
+function normalizeArray(data) {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data.data)) return data.data
+  return []
+}
+
+function normalizeObject(data) {
+  if (!data) return {}
+  if (data.data && typeof data.data === 'object') return data.data
+  return data
+}
+
+async function refreshDashboard() {
   try {
-    const data = await dataService.fetchDashboardStats()
+    const [statRes, trendRes, contentRes] = await Promise.all([
+      dataService.fetchDashboardStats(),
+      dataService.fetchActivityTrend(),
+      dataService.fetchContentStats()
+    ])
+
+    const statData = normalizeObject(statRes)
+
     stats.value = {
-      userCount: data.userCount || 0,
-      postCount: data.postCount || 0,
-      pendingVerifications: data.pendingVerifications || 0,
-      pendingReports: data.pendingReports || 0,
-      pendingPosts: data.pendingPosts || 0
+      userCount: Number(statData.userCount || 0),
+      postCount: Number(statData.postCount || 0),
+      pendingVerifications: Number(statData.pendingVerifications || 0),
+      pendingReports: Number(statData.pendingReports || 0),
+      pendingPosts: Number(statData.pendingPosts || 0)
     }
-    
-    // 获取图表数据
-    chartData.value = await dataService.fetchActivityTrend()
-    contentStats.value = await dataService.fetchContentStats()
+
+    chartData.value = normalizeArray(trendRes).map(item => ({
+      name: item.name,
+      visits: Number(item.visits || 0),
+      posts: Number(item.posts || 0)
+    }))
+
+    contentStats.value = normalizeArray(contentRes).map(item => ({
+      name: item.name,
+      posts: Number(item.posts || 0)
+    }))
   } catch (e) {
-    console.error('获取统计数据失败:', e)
+    console.error('获取真实数据看板失败:', e)
   }
+}
 
-  // 图表数据实时更新
-  interval = setInterval(() => {
+onMounted(async () => {
+  await refreshDashboard()
+
+  interval = setInterval(async () => {
     if (!isLive.value) return
-    
-    // 如果没有数据，初始化
-    if (chartData.value.length === 0) return
 
-    const lastItem = chartData.value[chartData.value.length - 1]
-    
-    // 简单模拟下一时刻的数据
-    // 在真实场景中，这里应该调用API获取最新即时数据
-    // 为了平滑过渡，我们移动时间窗口
-    const nextHourNum = parseInt(lastItem.name.split(':')[0]) + 1
-    const nextName = `${nextHourNum > 23 ? '00' : nextHourNum.toString().padStart(2, '0')}:00`
-    
-    const newVisits = Math.floor(Math.random() * (5000 - 1000) + 1000)
-    const newPosts = Math.floor(Math.random() * 20) // 增量较小
-
-    // 移除第一个，添加一个新的
-    if (chartData.value.length >= 7) {
-      chartData.value.shift()
-    }
-    chartData.value.push({ name: nextName, visits: newVisits, posts: newPosts })
+    // 真正重新请求后端，不再用 Math.random 造假
+    await refreshDashboard()
   }, 3000)
 })
 
