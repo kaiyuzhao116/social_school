@@ -108,16 +108,24 @@
             </div>
 
             <button
-                @click="handleRegister(event)"
-                :disabled="event.category !== '报名中' || (event.maxAttendees > 0 && event.attendees >= event.maxAttendees)"
+                @click="event.registered ? handleUnregister(event) : handleRegister(event)"
+                :disabled="
+      !event.registered &&
+      (
+        event.category !== '报名中' ||
+        (event.maxAttendees > 0 && event.attendees >= event.maxAttendees)
+      )
+    "
                 class="flex items-center gap-1 text-sm font-bold text-brand-purple hover:text-indigo-600 transition-colors disabled:text-gray-400 disabled:cursor-not-allowed"
             >
               {{
-                event.category !== '报名中'
-                    ? event.category
-                    : event.maxAttendees > 0 && event.attendees >= event.maxAttendees
-                        ? '名额已满'
-                        : '立即报名'
+                event.registered
+                    ? '取消报名'
+                    : event.category !== '报名中'
+                        ? event.category
+                        : event.maxAttendees > 0 && event.attendees >= event.maxAttendees
+                            ? '名额已满'
+                            : '立即报名'
               }}
               <ArrowRight class="w-4 h-4" />
             </button>
@@ -147,11 +155,15 @@ const handleRegister = async (event) => {
   }
 
   try {
-    await request.post(`/events/${event.id}/register`)
+    const res = await request.post(`/events/${event.id}/register`)
+
+    if (res.code && res.code !== 200) {
+      alert(res.message || res.msg || '报名失败')
+      return
+    }
 
     alert('报名成功')
 
-    // 重新加载活动列表，刷新报名人数
     await loadEvents()
   } catch (e) {
     console.error('报名失败:', e)
@@ -159,7 +171,37 @@ const handleRegister = async (event) => {
     alert(
         e.response?.data?.message ||
         e.response?.data?.msg ||
+        e.message ||
         '报名失败，请检查是否已登录或是否已经报名'
+    )
+  }
+}
+
+
+const handleUnregister = async (event) => {
+  if (!confirm('确认取消报名该活动吗？')) {
+    return
+  }
+
+  try {
+    const res = await request.delete(`/events/${event.id}/register`)
+
+    if (res.code && res.code !== 200) {
+      alert(res.message || res.msg || '取消报名失败')
+      return
+    }
+
+    alert('取消报名成功')
+
+    await loadEvents()
+  } catch (e) {
+    console.error('取消报名失败:', e)
+
+    alert(
+        e.response?.data?.message ||
+        e.response?.data?.msg ||
+        e.message ||
+        '取消报名失败'
     )
   }
 }
@@ -224,7 +266,24 @@ const mapEvent = (activity) => {
         `https://picsum.photos/seed/event${activity.id}/800/400`,
     attendees: activity.participantCount || 0,
     maxAttendees: activity.maxParticipants || 0,
-    color: getColor(activity.status)
+    color: getColor(activity.status),
+    registered: false
+  }
+}
+const loadMyRegisteredIds = async () => {
+  try {
+    const res = await request.get('/events/my')
+
+    const list =
+        res.data?.records ||
+        res.data ||
+        res.records ||
+        []
+
+    return new Set(list.map(item => item.id))
+  } catch (e) {
+    console.warn('加载我的报名活动失败:', e)
+    return new Set()
   }
 }
 
@@ -232,8 +291,17 @@ const loadEvents = async () => {
   isLoading.value = true
 
   try {
-    const res = await request.get('/activities')
-    events.value = (res.data || []).map(mapEvent)
+    const [activityRes, registeredIds] = await Promise.all([
+      request.get('/activities'),
+      loadMyRegisteredIds()
+    ])
+
+    events.value = (activityRes.data || [])
+        .map(mapEvent)
+        .map(event => ({
+          ...event,
+          registered: registeredIds.has(event.id)
+        }))
   } catch (e) {
     console.error('加载活动失败:', e)
     events.value = []

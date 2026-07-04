@@ -42,7 +42,7 @@ public class EventController {
         if (activity.getMaxParticipants() != null && activity.getParticipantCount() >= activity.getMaxParticipants()) {
             return Result.error("报名人数已满");
         }
-        
+
         boolean success = activityService.registerUser(id, principal.getId());
         if (!success) {
             return Result.error("您已报名过此活动");
@@ -52,7 +52,12 @@ public class EventController {
 
     @DeleteMapping("/{id}/register")
     public Result<?> unregisterEvent(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
-        activityService.unregisterUser(id, principal.getId());
+        boolean success = activityService.unregisterUser(id, principal.getId());
+
+        if (!success) {
+            return Result.error("您尚未报名该活动");
+        }
+
         return Result.success();
     }
 
