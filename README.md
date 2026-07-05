@@ -201,6 +201,268 @@ MySQL / Redis / RabbitMQ
 
 ---
 
+
+---
+
+## 本地启动说明
+
+本项目采用前后端分离架构，本地开发时需要分别启动后端服务和前端服务，并确保 MySQL、Redis、RabbitMQ 已正常运行。
+
+### 一、本地环境要求
+
+推荐本地环境：
+
+```text
+JDK：21
+Maven：3.8+
+Node.js：20+
+MySQL：8.0
+Redis：7
+RabbitMQ：3-management
+```
+
+---
+
+### 二、启动本地中间件
+
+如果本地没有安装 MySQL、Redis、RabbitMQ，可以使用 Docker 快速启动。
+
+#### 1. 启动 MySQL
+
+```bash
+docker run -d \
+  --name campus-mysql \
+  -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD=123456 \
+  -e MYSQL_DATABASE=campusconnect \
+  --restart=always \
+  mysql:8.0
+```
+
+导入数据库表结构：
+
+```bash
+docker exec -i campus-mysql mysql -uroot -p123456 < docs/sql/campusconnect_schema.sql
+```
+
+检查数据库表：
+
+```bash
+docker exec -it campus-mysql mysql -uroot -p123456 -e "use campusconnect; show tables;"
+```
+
+#### 2. 启动 Redis
+
+```bash
+docker run -d \
+  --name campus-redis \
+  -p 6379:6379 \
+  --restart=always \
+  redis:7
+```
+
+#### 3. 启动 RabbitMQ
+
+```bash
+docker run -d \
+  --name campus-rabbitmq \
+  -p 5672:5672 \
+  -p 15672:15672 \
+  -e RABBITMQ_DEFAULT_USER=admin \
+  -e RABBITMQ_DEFAULT_PASS=123456 \
+  --restart=always \
+  rabbitmq:3-management
+```
+
+RabbitMQ 管理后台：
+
+```text
+http://localhost:15672
+```
+
+测试账号：
+
+```text
+username: admin
+password: 123456
+```
+
+---
+
+### 三、后端本地启动
+
+后端项目目录：
+
+```text
+campusconnect-api
+```
+
+后端默认配置：
+
+```text
+端口：8080
+接口前缀：/api
+```
+
+后端配置文件：
+
+```text
+campusconnect-api/src/main/resources/application.yml
+```
+
+确认本地配置如下：
+
+```yaml
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/campusconnect?useUnicode=true&characterEncoding=utf-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: 123456
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: admin
+    password: 123456
+    virtual-host: /
+```
+
+#### 方式一：IDEA 启动
+
+使用 IntelliJ IDEA 打开项目，找到后端启动类：
+
+```text
+CampusConnectApplication
+```
+
+直接运行即可。
+
+#### 方式二：命令行启动
+
+进入后端目录：
+
+```bash
+cd campusconnect-api
+```
+
+使用 Maven 启动：
+
+```bash
+mvn spring-boot:run
+```
+
+或者先打包再启动：
+
+```bash
+mvn clean package -DskipTests
+java -jar target/campusconnect-api-1.0.0.jar
+```
+
+后端启动成功后，访问测试接口：
+
+```text
+http://localhost:8080/api/admin/dashboard/stats
+```
+
+如果返回 JSON，说明后端启动成功。
+
+---
+
+### 四、前端本地启动
+
+前端项目目录：
+
+```text
+campusconnect-web
+```
+
+进入前端目录：
+
+```bash
+cd campusconnect-web
+```
+
+安装依赖：
+
+```bash
+npm install
+```
+
+启动开发环境：
+
+```bash
+npm run dev
+```
+
+前端默认访问地址：
+
+```text
+http://localhost:3000
+```
+
+后台管理地址：
+
+```text
+http://localhost:3000/admin
+```
+
+---
+
+### 五、本地联调说明
+
+本地开发时，前端通过 Vite 代理访问后端接口。
+
+前端请求示例：
+
+```text
+/api/posts
+/api/auth/login
+/api/admin/dashboard/stats
+```
+
+实际会转发到：
+
+```text
+http://localhost:8080/api/...
+```
+
+如果前端请求后端失败，需要检查：
+
+```text
+1. 后端是否启动成功
+2. 后端端口是否为 8080
+3. 后端 context-path 是否为 /api
+4. MySQL、Redis、RabbitMQ 是否正常运行
+5. 前端 vite.config.js 代理配置是否正确
+```
+
+---
+
+### 六、本地启动顺序
+
+推荐按照以下顺序启动：
+
+```text
+1. 启动 MySQL
+2. 导入 docs/sql/campusconnect_schema.sql
+3. 启动 Redis
+4. 启动 RabbitMQ
+5. 启动 Spring Boot 后端
+6. 启动 Vue 前端
+7. 访问 http://localhost:3000
+```
+
 ## 一、服务器环境
 
 推荐服务器环境：
