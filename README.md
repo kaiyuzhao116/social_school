@@ -93,6 +93,38 @@
 - 排除 OPTIONS、WebSocket、后台看板自身请求等无效请求，避免统计数据虚高。
 
 
+## 项目截图
+
+### 首页动态
+
+![首页动态](./screenshots/frontend_home.png)
+
+### 学生拼团
+
+![学生拼团](./screenshots/group_buy.png)
+
+### 实时聊天室
+
+![实时聊天室](./screenshots/chat_room.png)
+
+### 后台数据看板
+
+![后台数据看板](./screenshots/admin_dashboard.png)
+
+### 系统流控
+
+![系统流控](./screenshots/traffic_control.png)
+
+### 活动管理
+
+![活动管理](./screenshots/activity_manage.png)
+
+
+
+
+
+
+
 
 ## 数据库初始化
 
@@ -112,3 +144,7 @@ mysql -uroot -p < docs/sql/campusconnect_schema.sql
 注意：我们放的是 `campusconnect_schema.sql`，不是完整的 `campusconnect.sql`。
 
 ---
+
+
+
+
