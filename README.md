@@ -91,3 +91,24 @@
 - 使用 Redis 按小时分桶记录访问量，基于 INCR 原子自增降低高频统计对 MySQL 的写入压力。
 - 后台趋势接口读取最近 7 小时访问量数据，返回时间序列供前端图表渲染。
 - 排除 OPTIONS、WebSocket、后台看板自身请求等无效请求，避免统计数据虚高。
+
+
+
+## 数据库初始化
+
+项目数据库使用 MySQL 8，初始化表结构文件位于：
+
+```text
+docs/sql/campusconnect_schema.sql
+
+mysql -uroot -p < docs/sql/campusconnect_schema.sql
+初始化方式：
+
+mysql -uroot -p < docs/sql/campusconnect_schema.sql
+
+本仓库仅提供数据库表结构 SQL，不包含真实用户数据、密码、帖子内容等敏感信息。
+
+
+注意：我们放的是 `campusconnect_schema.sql`，不是完整的 `campusconnect.sql`。
+
+---
