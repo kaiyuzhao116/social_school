@@ -61,6 +61,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/user/{id}/posts").permitAll()
                         .requestMatchers(HttpMethod.GET, "/user/{id}/following").permitAll()
                         .requestMatchers(HttpMethod.GET, "/user/{id}/followers").permitAll()
+                        .requestMatchers("/agent/**").permitAll()
                         // 帖子分享 - 公开（只增加计数，不需要登录）
                         .requestMatchers(HttpMethod.POST, "/posts/*/share").permitAll()
                         // 帖子 - 其他需要认证

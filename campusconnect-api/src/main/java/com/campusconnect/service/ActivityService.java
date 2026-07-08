@@ -23,9 +23,11 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ActivityService extends ServiceImpl<ActivityMapper, Activity> {
-
+    //操作报名表
     private final ActivityRegistrationMapper activityRegistrationMapper;
+    //操作 Redis 库存和报名用户集合
     private final StringRedisTemplate stringRedisTemplate;
+    //拿分布式锁
     private final RedissonClient redissonClient;
 
     private static final String REGISTER_LUA = """

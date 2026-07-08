@@ -67,3 +67,9 @@ logging:
   level:
     com.campusconnect: debug
     org.springframework.security: debug
+ai:
+  llm:
+    enabled: true
+    base-url: https://ws-7mbbhyiu6oujw4io.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/chat/completions
+    api-key: ${ALIYUN_API_KEY}
+    model: qwen3.7-plus

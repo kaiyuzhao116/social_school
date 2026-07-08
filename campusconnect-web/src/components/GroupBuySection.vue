@@ -165,6 +165,74 @@
         </div>
 
         <div class="p-6 space-y-4">
+          <div class="rounded-2xl border border-indigo-100 bg-indigo-50 p-4">
+            <label class="text-xs font-bold text-indigo-600">AI 一句话生成拼团</label>
+
+            <div class="mt-2 flex gap-2">
+              <input
+                  v-model="aiContent"
+                  class="flex-1 bg-white rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-indigo-200 text-sm"
+                  placeholder="例如：我想今晚找 2 个人一起点烧烤外卖"
+              />
+
+              <button
+                  @click="handleGenerateDraft"
+                  :disabled="isGeneratingDraft"
+                  class="px-4 py-3 rounded-xl bg-indigo-500 text-white text-sm font-bold hover:bg-indigo-600 disabled:opacity-60"
+              >
+                {{ isGeneratingDraft ? '生成中...' : 'AI生成' }}
+              </button>
+            </div>
+
+            <p class="text-xs text-gray-500 mt-2">
+              AI 会自动帮你填写标题、说明、分类、人数和地点，你确认后再发布。
+            </p>
+          </div>
+          <div
+              v-if="similarGroupBuys.length > 0"
+              class="rounded-2xl border border-orange-100 bg-orange-50 p-4"
+          >
+            <div class="text-sm font-bold text-orange-700">
+              发现类似拼团
+            </div>
+
+            <p class="text-xs text-orange-600 mt-1">
+              已经有人发起了相似拼团，你可以直接参加，也可以继续创建新的拼团。
+            </p>
+
+            <div class="mt-3 space-y-2">
+              <div
+                  v-for="item in similarGroupBuys"
+                  :key="item.id"
+                  class="bg-white rounded-xl p-3 flex items-center justify-between gap-3"
+              >
+                <div class="min-w-0">
+                  <div class="font-bold text-gray-900 text-sm truncate">
+                    {{ item.title }}
+                  </div>
+
+                  <div class="text-xs text-gray-500 mt-1">
+                    {{ item.category }}｜{{ item.location }}｜{{ item.currentCount }} / {{ item.targetCount }} 人
+                  </div>
+                </div>
+
+                <button
+                    v-if="!hasJoined(item.id) && !isCreator(item.id)"
+                    @click="handleJoin(item.id)"
+                    class="shrink-0 px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-bold hover:bg-orange-600"
+                >
+                  直接参加
+                </button>
+
+                <span
+                    v-else
+                    class="shrink-0 text-xs text-gray-400"
+                >
+        已参与
+      </span>
+              </div>
+            </div>
+          </div>
           <div>
             <label class="text-xs font-bold text-gray-500">拼团标题</label>
             <input
@@ -345,6 +413,10 @@ const stats = ref({
 const isModalOpen = ref(false)
 const isSaving = ref(false)
 
+const aiContent = ref('')
+const isGeneratingDraft = ref(false)
+const similarGroupBuys = ref([])
+
 const isMembersModalOpen = ref(false)
 const isMembersLoading = ref(false)
 const members = ref([])
@@ -374,6 +446,57 @@ const formatTime = (value) => {
   if (!value) return '暂无'
   return String(value).replace('T', ' ').slice(0, 16)
 }
+
+const normalizeCategory = (category) => {
+  if (!category) return '生活服务'
+
+  if (category.includes('饭') || category.includes('外卖') || category.includes('烧烤')) {
+    return '外卖拼单'
+  }
+
+  if (category.includes('饮品') || category.includes('奶茶') || category.includes('咖啡')) {
+    return '饮品拼单'
+  }
+
+  if (category.includes('资料') || category.includes('学习')) {
+    return '学习资料'
+  }
+
+  return '生活服务'
+}
+const extractKeywords = (text) => {
+  const keywords = ['烧烤', '外卖', '奶茶', '咖啡', '瑞幸', '水果', '拼车', '高铁站', '锦州南站', '羽毛球', '篮球', '打印', '资料']
+
+  return keywords.filter(keyword => text.includes(keyword))
+}
+
+const findSimilarGroupBuys = (draft) => {
+  const text = `${aiContent.value} ${draft.title || ''} ${draft.description || ''} ${draft.location || ''}`
+  const keywords = extractKeywords(text)
+
+  similarGroupBuys.value = groupBuys.value
+      .filter(item => item.status === 'GROUPING')
+      .filter(item => {
+        const itemText = `${item.title || ''} ${item.description || ''} ${item.category || ''} ${item.location || ''}`
+
+        const keywordHit = keywords.some(keyword => itemText.includes(keyword))
+
+        const categoryHit =
+            form.value.category &&
+            item.category &&
+            item.category === form.value.category
+
+        const locationHit =
+            form.value.location &&
+            item.location &&
+            item.location.includes(form.value.location)
+
+        return keywordHit || categoryHit || locationHit
+      })
+      .slice(0, 2)
+}
+
+
 const getLocalDateTimeValue = (date = new Date()) => {
   const pad = (n) => String(n).padStart(2, '0')
 
@@ -468,13 +591,44 @@ const openCreateModal = () => {
     contactInfo: '',
     deadline: getLocalDateTimeValue(defaultDeadline)
   }
-
+  aiContent.value = ''
+  similarGroupBuys.value = []
   isModalOpen.value = true
 }
 const closeModal = () => {
   isModalOpen.value = false
 }
+const handleGenerateDraft = async () => {
+  if (!aiContent.value.trim()) {
+    alert('请输入一句拼团需求')
+    return
+  }
 
+  isGeneratingDraft.value = true
+
+  try {
+    const res = await request.post('/agent/group-buy/draft', {
+      content: aiContent.value
+    })
+
+    const draft = res.data?.data || res.data || {}
+
+    form.value.title = draft.title || form.value.title
+    form.value.description = draft.description || form.value.description
+    form.value.category = normalizeCategory(draft.category)
+    form.value.targetCount = draft.targetCount || form.value.targetCount
+    form.value.location = draft.location || form.value.location
+
+    findSimilarGroupBuys(draft)
+
+    alert('AI 已生成拼团草稿，请检查后发布')
+  } catch (e) {
+    console.error('AI 生成拼团草稿失败:', e)
+    alert('AI 生成失败，请看 F12 控制台或 Network 报错')
+  } finally {
+    isGeneratingDraft.value = false
+  }
+}
 const handleCreate = async () => {
   if (!form.value.title || !form.value.description || !form.value.location || !form.value.deadline) {
     alert('请填写标题、说明、地点和截止时间')
