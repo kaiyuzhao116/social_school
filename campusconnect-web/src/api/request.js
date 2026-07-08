@@ -4,7 +4,7 @@ import axios from 'axios'
 const request = axios.create({
   // Use Vite proxy
   baseURL: '/api',
-  timeout: 15000,
+  timeout: 60000,
   // If using cookies/session, uncomment the following line
   // withCredentials: true,
 })
