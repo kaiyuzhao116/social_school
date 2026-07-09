@@ -69,6 +69,11 @@
                 <CheckSquare class="w-4 h-4 text-purple-500" />
                 一键生成待办
               </div>
+
+              <div class="flex items-center gap-2">
+                <Sparkles class="w-4 h-4 text-indigo-500" />
+                多专家协作与反思
+              </div>
             </div>
           </div>
         </div>
@@ -115,9 +120,9 @@
                 <div class="bg-gray-50 rounded-2xl p-4 text-sm text-gray-700 leading-7">
                   你好，我是渤大校园事务 Agent。你可以问我：
                   <br />
-                  <span class="font-bold text-gray-900">“缓考怎么申请？”</span>
+                  <span class="font-bold text-gray-900">“最近学校有什么通知？”</span>
                   <br />
-                  <span class="font-bold text-gray-900">“这条通知和我有关吗？”</span>
+                  <span class="font-bold text-gray-900">“缓考怎么申请？”</span>
                   <br />
                   <span class="font-bold text-gray-900">“帮我把通知总结成三句话。”</span>
                 </div>
@@ -132,33 +137,126 @@
                 </div>
 
                 <div class="flex-1">
+                  <!-- 回答主体 -->
                   <div class="bg-indigo-50 rounded-2xl p-4 text-sm text-gray-800 leading-7">
-                    <div class="font-black text-gray-900 mb-2">
-                      {{ demoAnswer.title }}
+                    <div class="flex items-center justify-between gap-3 mb-2">
+                      <div class="font-black text-gray-900">
+                        {{ demoAnswer.title }}
+                      </div>
+
+                      <div
+                          v-if="demoAnswer.intent"
+                          class="text-[11px] px-2 py-1 rounded-full bg-white text-indigo-600 font-bold"
+                      >
+                        {{ demoAnswer.intent }}
+                      </div>
                     </div>
 
-                    <div class="whitespace-pre-line">
+                    <div
+                        v-if="demoAnswer.confidence !== null && demoAnswer.confidence !== undefined"
+                        class="text-xs text-indigo-500 mb-2"
+                    >
+                      置信度：{{ formatConfidence(demoAnswer.confidence) }}
+                    </div>
+
+                    <div class="agent-answer-text">
                       {{ demoAnswer.answer }}
                     </div>
                   </div>
 
-                  <div v-if="demoAnswer.sources?.length" class="mt-3 space-y-2">
+                  <!-- 来源卡片 -->
+                  <div
+                      v-if="demoAnswer.sources && demoAnswer.sources.length"
+                      class="source-list"
+                  >
                     <div
-                        v-for="source in demoAnswer.sources"
-                        :key="source.title"
-                        class="px-3 py-2 rounded-xl bg-green-50 text-green-700 text-xs"
+                        v-for="(source, index) in displaySources"
+                        :key="`${source.title || 'source'}-${index}`"
+                        class="source-card"
                     >
-                      来源：{{ source.sourceName }} / {{ source.title }} / 可信度：{{ source.trustLevel }}
+                      <div class="source-title">
+                        {{ index + 1 }}. {{ source.title || '未命名资料' }}
+                      </div>
+
+                      <div class="source-meta">
+                        来源：{{ source.sourceName || '未知来源' }}
+                        <span v-if="source.sourceType"> / {{ source.sourceType }}</span>
+                        <span v-if="source.trustLevel"> / 可信度：{{ source.trustLevel }}</span>
+                      </div>
+
+                      <div
+                          v-if="source.contentPreview"
+                          class="source-preview"
+                      >
+                        {{ source.contentPreview }}
+                      </div>
+
+                      <a
+                          v-if="source.url"
+                          class="source-link"
+                          :href="source.url"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                      >
+                        查看原通知
+                      </a>
                     </div>
                   </div>
-                  <div v-if="demoAnswer.todos?.length" class="mt-3 space-y-2">
-                    <div class="font-bold text-sm text-gray-900">待办建议：</div>
+
+                  <!-- 待办建议 -->
+                  <div
+                      v-if="demoAnswer.todos && demoAnswer.todos.length"
+                      class="todo-suggestion"
+                  >
+                    <div class="todo-title">
+                      待办建议：
+                    </div>
+
                     <div
-                        v-for="todo in demoAnswer.todos"
-                        :key="todo.title"
-                        class="px-3 py-2 rounded-xl bg-indigo-50 text-indigo-700 text-xs"
+                        v-for="(todo, index) in demoAnswer.todos"
+                        :key="`${todo.title || 'todo'}-${index}`"
+                        class="todo-item"
                     >
-                      □ {{ todo.title }}
+                      <input
+                          type="checkbox"
+                          :checked="todo.done"
+                          disabled
+                      />
+                      <span>{{ todo.title }}</span>
+                    </div>
+                  </div>
+
+                  <!-- Agent 执行过程 -->
+                  <div
+                      v-if="hasAgentTrace"
+                      class="agent-trace-card"
+                  >
+                    <div class="trace-header">
+                      <span>Agent 执行过程</span>
+
+                      <span
+                          class="risk-badge"
+                          :class="riskBadgeClass"
+                      >
+                        {{ demoAnswer.riskLevel || 'LOW' }}
+                      </span>
+                    </div>
+
+                    <div
+                        v-if="demoAnswer.reflectionSuggestion"
+                        class="reflection-text"
+                    >
+                      反思结果：{{ demoAnswer.reflectionSuggestion }}
+                    </div>
+
+                    <div class="trace-list">
+                      <div
+                          v-for="(trace, index) in demoAnswer.expertTrace"
+                          :key="`${trace}-${index}`"
+                          class="trace-item"
+                      >
+                        {{ index + 1 }}. {{ trace }}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -171,7 +269,7 @@
                 <input
                     v-model="question"
                     class="flex-1 bg-white rounded-2xl px-4 py-3 outline-none border border-gray-100 focus:ring-2 focus:ring-indigo-200 text-sm"
-                    placeholder="例如：缓考怎么申请？成绩证明去哪办？"
+                    placeholder="例如：最近学校有什么通知？缓考怎么申请？"
                     @keyup.enter="sendQuestion"
                 />
 
@@ -276,8 +374,10 @@ import {
 } from 'lucide-vue-next'
 import { ref, computed } from 'vue'
 import { chatWithCampusAgent } from '@/api/campusAgent'
+
 const question = ref('')
 const demoAnswer = ref(null)
+const loading = ref(false)
 
 const sources = [
   {
@@ -303,9 +403,9 @@ const sources = [
 ]
 
 const quickQuestions = [
+  '最近学校有什么通知？',
   '缓考怎么申请？',
   '成绩证明去哪办？',
-  '这条通知和我有关吗？',
   '帮我把通知总结成三句话'
 ]
 
@@ -338,13 +438,38 @@ const ideas = [
   '判断通知是否与我有关',
   '自动提取截止时间',
   '一键生成待办清单',
-  '回答附带来源可信度'
+  '回答附带来源可信度',
+  '展示 Agent 执行过程'
 ]
+const displaySources = computed(() => {
+  if (!demoAnswer.value?.sources?.length) {
+    return []
+  }
 
-const fillQuestion = (text) => {
-  question.value = text
-  sendQuestion()
-}
+  return demoAnswer.value.sources.slice(0, 3)
+})
+const hasAgentTrace = computed(() => {
+  return Boolean(
+      demoAnswer.value &&
+      demoAnswer.value.expertTrace &&
+      demoAnswer.value.expertTrace.length
+  )
+})
+
+const riskBadgeClass = computed(() => {
+  const risk = demoAnswer.value?.riskLevel || 'LOW'
+
+  if (risk === 'HIGH') {
+    return 'risk-high'
+  }
+
+  if (risk === 'MEDIUM') {
+    return 'risk-medium'
+  }
+
+  return 'risk-low'
+})
+
 const displayTodos = computed(() => {
   if (demoAnswer.value?.todos?.length) {
     return demoAnswer.value.todos.map(todo => todo.title)
@@ -364,7 +489,39 @@ const displayDeadlines = computed(() => {
 
   return defaultDeadlines
 })
-const loading = ref(false)
+
+const formatConfidence = (value) => {
+  if (value === null || value === undefined || value === '') {
+    return '未知'
+  }
+
+  if (typeof value === 'number') {
+    return `${Math.round(value * 100)}%`
+  }
+
+  return value
+}
+
+const fillQuestion = (text) => {
+  question.value = text
+  sendQuestion()
+}
+
+const normalizeAgentData = (res) => {
+  if (res?.answer) {
+    return res
+  }
+
+  if (res?.data?.answer) {
+    return res.data
+  }
+
+  if (res?.data?.data?.answer) {
+    return res.data.data
+  }
+
+  return res?.data || res
+}
 
 const sendQuestion = async () => {
   if (!question.value.trim()) {
@@ -378,28 +535,185 @@ const sendQuestion = async () => {
       question: question.value
     })
 
-    const data = res.data || res
+    const data = normalizeAgentData(res)
 
     demoAnswer.value = {
       title: '校园事务 Agent 回答：',
-      answer: data.answer,
+      answer: data.answer || '暂时没有生成回答。',
       intent: data.intent,
       confidence: data.confidence,
       sources: data.sources || [],
       todos: data.todos || [],
-      deadlines: data.deadlines || []
+      deadlines: data.deadlines || [],
+      reflectionPassed: data.reflectionPassed,
+      riskLevel: data.riskLevel,
+      reflectionSuggestion: data.reflectionSuggestion,
+      expertTrace: data.expertTrace || []
     }
   } catch (e) {
     console.error(e)
+
     demoAnswer.value = {
       title: '请求失败',
       answer: '校园 Agent 暂时无法回答，请稍后再试。',
+      intent: 'ERROR',
+      confidence: null,
       sources: [],
       todos: [],
-      deadlines: []
+      deadlines: [],
+      reflectionPassed: false,
+      riskLevel: 'UNKNOWN',
+      reflectionSuggestion: '接口请求失败',
+      expertTrace: []
     }
   } finally {
     loading.value = false
   }
 }
 </script>
+
+<style scoped>
+.agent-answer-text {
+  white-space: pre-line;
+  line-height: 1.8;
+  font-size: 14px;
+  color: #1f2937;
+}
+
+.source-list {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.source-card {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #ecfdf5;
+  border: 1px solid #bbf7d0;
+}
+
+.source-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #065f46;
+  margin-bottom: 6px;
+  line-height: 1.5;
+}
+
+.source-meta {
+  font-size: 12px;
+  color: #047857;
+  margin-bottom: 6px;
+}
+
+.source-preview {
+  font-size: 12px;
+  color: #4b5563;
+  line-height: 1.6;
+  max-height: 42px;
+  overflow: hidden;
+}
+
+.source-link {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.source-link:hover {
+  text-decoration: underline;
+}
+
+.todo-suggestion {
+  margin-top: 14px;
+}
+
+.todo-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.todo-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 13px;
+  line-height: 1.5;
+  margin-bottom: 6px;
+}
+
+.todo-item input {
+  margin-top: 3px;
+}
+
+.agent-trace-card {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+}
+
+.trace-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  font-weight: 700;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.risk-badge {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.risk-low {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.risk-medium {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.risk-high {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.reflection-text {
+  font-size: 12px;
+  color: #4b5563;
+  margin-bottom: 8px;
+  line-height: 1.6;
+}
+
+.trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.trace-item {
+  font-size: 12px;
+  color: #6b7280;
+  line-height: 1.5;
+}
+</style>
