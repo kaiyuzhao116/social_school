@@ -127,7 +127,7 @@
 
       <!-- Scrollable Content -->
       <!-- Scrollable Content -->
-      <div class="flex-1 overflow-hidden relative rounded-t-[2.5rem] p-1">
+      <div class="flex-1 overflow-y-auto no-scrollbar relative rounded-t-[2.5rem] p-1">
         <AdminDashboard
             v-if="currentView === ViewState.DASHBOARD"
             @navigate="handleNavigate"
@@ -145,6 +145,8 @@
         <PostManagement v-else-if="currentView === ViewState.POST_MANAGEMENT" />
         <ActivityManagement v-else-if="currentView === ViewState.ACTIVITIES" />
         <LostFoundManagement v-else-if="currentView === ViewState.LOST_FOUND" />
+
+        <AdminKnowledgeImportView v-else-if="currentView === ViewState.KNOWLEDGE_IMPORT" />
 
         <AdminDashboard v-else @navigate="handleNavigate" />
       </div>
@@ -243,6 +245,7 @@ import AnnouncementManagement from './components/AnnouncementManagement.vue'
 import PostManagement from './components/PostManagement.vue'
 import ActivityManagement from './components/ActivityManagement.vue'
 import LostFoundManagement from './components/LostFoundManagement.vue'
+import AdminKnowledgeImportView from './AdminKnowledgeImportView.vue'
 
 // 状态
 // 同步检查 localStorage，避免刷新时闪现登录页

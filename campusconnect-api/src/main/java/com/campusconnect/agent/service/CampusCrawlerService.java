@@ -89,7 +89,9 @@ public class CampusCrawlerService {
             Set<String> visitedUrls = new LinkedHashSet<>();
 
             for (JsonNode item : items) {
-                if (success >= maxCount) {
+                // 注意：这里用 total 控制扫描数量，不用 success。
+                // 因为重复通知会 imported=false，不算 success。
+                if (total >= maxCount) {
                     break;
                 }
 
@@ -137,12 +139,21 @@ public class CampusCrawlerService {
                     importRequest.setUrl(detailUrl);
                     importRequest.setContent(content);
 
-                    campusKnowledgeImportService.importKnowledge(importRequest);
+                    Map<String, Object> importResult =
+                            campusKnowledgeImportService.importKnowledge(importRequest);
 
-                    success++;
-                    successUrls.add(detailUrl);
+                    Boolean imported = (Boolean) importResult.get("imported");
 
-                    log.info("校园资料导入成功：{} {}", realTitle, detailUrl);
+                    if (Boolean.TRUE.equals(imported)) {
+                        success++;
+                        successUrls.add(detailUrl);
+
+                        log.info("校园资料导入成功：{} {}", realTitle, detailUrl);
+                    } else {
+                        log.info("资料已存在，跳过重复导入：{}，原因：{}",
+                                detailUrl,
+                                importResult.get("skipReason"));
+                    }
                 } catch (Exception e) {
                     fail++;
                     String msg = "导入失败：" + detailUrl + "，原因：" + e.getMessage();
@@ -200,7 +211,10 @@ public class CampusCrawlerService {
                     String content = extractContent(detailDoc);
 
                     if (content.length() < 80) {
-                        log.warn("正文太短，跳过：{} {}", realTitle, detailUrl);
+                        fail++;
+                        String msg = "正文太短，跳过：" + realTitle + "，地址：" + detailUrl;
+                        failMessages.add(msg);
+                        log.warn(msg);
                         continue;
                     }
 
@@ -212,12 +226,21 @@ public class CampusCrawlerService {
                     importRequest.setUrl(detailUrl);
                     importRequest.setContent(content);
 
-                    campusKnowledgeImportService.importKnowledge(importRequest);
+                    Map<String, Object> importResult =
+                            campusKnowledgeImportService.importKnowledge(importRequest);
 
-                    success++;
-                    successUrls.add(detailUrl);
+                    Boolean imported = (Boolean) importResult.get("imported");
 
-                    log.info("校园资料导入成功：{} {}", realTitle, detailUrl);
+                    if (Boolean.TRUE.equals(imported)) {
+                        success++;
+                        successUrls.add(detailUrl);
+
+                        log.info("校园资料导入成功：{} {}", realTitle, detailUrl);
+                    } else {
+                        log.info("资料已存在，跳过重复导入：{}，原因：{}",
+                                detailUrl,
+                                importResult.get("skipReason"));
+                    }
                 } catch (Exception e) {
                     fail++;
                     String msg = "导入失败：" + detailUrl + "，原因：" + e.getMessage();
@@ -231,15 +254,12 @@ public class CampusCrawlerService {
 
         return buildResult(request.getListUrl(), total, success, fail, successUrls, failMessages);
     }
+
     private String buildBhuDetailUrl(CampusCrawlRequest request, String rawUrl) {
         if (isBlank(rawUrl)) {
             return "";
         }
 
-        // 渤大 more-datas 返回的是：
-        // /engine2/general-rest/3510554/proxy-detail-url?pageType=1&typeId=2613739
-        // 这里要转成真正详情页：
-        // /engine2/general/3510554/detail?engineInstanceId=425304&typeId=2613739&pageId=55965&websiteId=43901&currentBranch=0
         Pattern pattern = Pattern.compile("/engine2/general-rest/(\\d+)/proxy-detail-url");
         Matcher matcher = pattern.matcher(rawUrl);
 
@@ -264,6 +284,7 @@ public class CampusCrawlerService {
 
         return toAbsoluteUrl(request.getListUrl(), rawUrl);
     }
+
     /**
      * 从 more-datas 返回的 JSON 里递归找通知项
      */
@@ -343,7 +364,6 @@ public class CampusCrawlerService {
 
         return "";
     }
-
 
     /**
      * 从静态列表页提取详情页链接

@@ -56,7 +56,8 @@ import {
   Megaphone,
   FileText,
   Calendar,
-  Search
+  Search,
+  Database
 } from 'lucide-vue-next'
 import { ViewState } from '../types'
 
@@ -80,5 +81,6 @@ const menuItems = [
   { id: ViewState.LOST_FOUND, icon: Search, label: '失物招领' },
   { id: ViewState.USERS, icon: Users, label: '用户管理' },
   { id: ViewState.REPORTS, icon: Flag, label: '举报管理' },
+  { id: ViewState.KNOWLEDGE_IMPORT, icon: Database, label: '知识库导入' }
 ]
 </script>

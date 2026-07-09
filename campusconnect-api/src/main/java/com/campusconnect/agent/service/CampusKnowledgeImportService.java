@@ -7,6 +7,7 @@ import com.campusconnect.agent.entity.CampusKnowledgeChunk;
 import com.campusconnect.agent.mapper.CampusKnowledgeChunkMapper;
 import com.campusconnect.agent.mapper.CampusKnowledgeMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.DigestUtils;
@@ -17,6 +18,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class CampusKnowledgeImportService {
@@ -41,33 +43,73 @@ public class CampusKnowledgeImportService {
             throw new RuntimeException("正文内容不能为空");
         }
 
+        /*
+         * 用 title + content 算 hash。
+         * 用于 URL 变化但正文相同的情况。
+         */
         String contentHash = DigestUtils.md5DigestAsHex(
-                request.getContent().getBytes(StandardCharsets.UTF_8)
+                (request.getTitle() + "\n" + request.getContent())
+                        .getBytes(StandardCharsets.UTF_8)
         );
 
-        CampusKnowledge existed = campusKnowledgeMapper.selectOne(
+        /*
+         * 1. URL 去重：
+         * 只要 URL 已存在，就直接跳过。
+         * 这样自动爬虫不会因为页面模板、浏览量、动态字段变化而反复更新和重建向量。
+         */
+        CampusKnowledge existedByUrl = campusKnowledgeMapper.selectOne(
                 new LambdaQueryWrapper<CampusKnowledge>()
                         .eq(CampusKnowledge::getUrl, request.getUrl())
                         .last("LIMIT 1")
         );
 
-        if (existed != null && contentHash.equals(existed.getContentHash())) {
+        if (existedByUrl != null) {
+            existedByUrl.setLastCrawledAt(LocalDateTime.now());
+            existedByUrl.setUpdatedAt(LocalDateTime.now());
+            campusKnowledgeMapper.updateById(existedByUrl);
+
+            log.info("知识 URL 已存在，跳过重复导入，url={}", request.getUrl());
+
             Map<String, Object> result = new HashMap<>();
-            result.put("knowledgeId", existed.getId());
-            result.put("message", "内容未变化，无需重复导入");
+            result.put("knowledgeId", existedByUrl.getId());
+            result.put("title", existedByUrl.getTitle());
             result.put("imported", false);
+            result.put("updated", false);
+            result.put("skipReason", "URL 已存在");
+            result.put("message", "URL 已存在，无需重复导入");
             return result;
         }
 
-        CampusKnowledge knowledge;
+        /*
+         * 2. 内容 Hash 去重：
+         * 如果 URL 不同，但 title + content 一样，也跳过。
+         * 防止同一篇通知因为代理链接变化而重复入库。
+         */
+        CampusKnowledge existedByHash = campusKnowledgeMapper.selectOne(
+                new LambdaQueryWrapper<CampusKnowledge>()
+                        .eq(CampusKnowledge::getContentHash, contentHash)
+                        .last("LIMIT 1")
+        );
 
-        if (existed == null) {
-            knowledge = new CampusKnowledge();
-            knowledge.setCreatedAt(LocalDateTime.now());
-        } else {
-            knowledge = existed;
+        if (existedByHash != null) {
+            log.info("知识内容已存在，跳过导入，title={}, existedId={}",
+                    request.getTitle(),
+                    existedByHash.getId());
+
+            Map<String, Object> result = new HashMap<>();
+            result.put("knowledgeId", existedByHash.getId());
+            result.put("title", existedByHash.getTitle());
+            result.put("imported", false);
+            result.put("updated", false);
+            result.put("skipReason", "内容 Hash 已存在");
+            result.put("message", "相同内容已存在，无需重复导入");
+            return result;
         }
 
+        /*
+         * 3. 新增知识
+         */
+        CampusKnowledge knowledge = new CampusKnowledge();
         knowledge.setTitle(request.getTitle());
         knowledge.setSourceName(defaultValue(request.getSourceName(), "未知来源"));
         knowledge.setSourceType(defaultValue(request.getSourceType(), "校园通知"));
@@ -77,22 +119,16 @@ public class CampusKnowledgeImportService {
         knowledge.setTrustLevel(defaultValue(request.getTrustLevel(), "高"));
         knowledge.setLastCrawledAt(LocalDateTime.now());
         knowledge.setStatus("ACTIVE");
+        knowledge.setCreatedAt(LocalDateTime.now());
         knowledge.setUpdatedAt(LocalDateTime.now());
 
-        if (knowledge.getId() == null) {
-            campusKnowledgeMapper.insert(knowledge);
-        } else {
-            campusKnowledgeMapper.updateById(knowledge);
+        campusKnowledgeMapper.insert(knowledge);
 
-            // 简单处理：内容变了就删除旧 chunk
-            campusKnowledgeChunkMapper.delete(
-                    new LambdaQueryWrapper<CampusKnowledgeChunk>()
-                            .eq(CampusKnowledgeChunk::getKnowledgeId, knowledge.getId())
-            );
+        log.info("新增校园知识：id={}, title={}", knowledge.getId(), knowledge.getTitle());
 
-            // 注意：Qdrant 旧向量删除后面再补，现在先跑通主流程
-        }
-
+        /*
+         * 4. 文本切片
+         */
         List<String> chunks = campusChunkService.split(request.getContent());
 
         int successCount = 0;
@@ -109,10 +145,19 @@ public class CampusKnowledgeImportService {
 
             campusKnowledgeChunkMapper.insert(chunk);
 
+            /*
+             * 5. Embedding 向量化
+             */
             List<Double> vector = embeddingClient.embed(chunkText);
 
+            /*
+             * 6. 确保 Qdrant collection 存在
+             */
             qdrantVectorService.ensureCollection(vector.size());
 
+            /*
+             * 7. 写入 Qdrant
+             */
             Map<String, Object> payload = new HashMap<>();
             payload.put("chunkId", chunk.getId());
             payload.put("knowledgeId", knowledge.getId());
@@ -137,6 +182,8 @@ public class CampusKnowledgeImportService {
         result.put("chunkCount", chunks.size());
         result.put("successCount", successCount);
         result.put("imported", true);
+        result.put("updated", false);
+        result.put("message", "知识导入成功");
 
         return result;
     }
