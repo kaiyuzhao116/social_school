@@ -15,7 +15,7 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-
+import com.campusconnect.agent.dto.CampusReflectionResult;
 @Service
 @RequiredArgsConstructor
 public class CampusLlmClient {
@@ -121,7 +121,111 @@ public class CampusLlmClient {
             throw new RuntimeException("校园 Agent 生成回答失败：" + e.getMessage(), e);
         }
     }
+    public CampusReflectionResult reflectAnswer(
+            String question,
+            List<CampusRagChunkDTO> chunks,
+            CampusAgentResponse draftResponse
+    ) {
+        if (aiLlmProperties.getEnabled() == null || !aiLlmProperties.getEnabled()) {
+            throw new RuntimeException("AI 未开启");
+        }
 
+        if (isBlank(aiLlmProperties.getBaseUrl())
+                || isBlank(aiLlmProperties.getApiKey())
+                || isBlank(aiLlmProperties.getModel())) {
+            throw new RuntimeException("AI 配置不完整");
+        }
+
+        try {
+            String context = buildContext(chunks);
+
+            String draftJson = objectMapper.writeValueAsString(draftResponse);
+
+            String systemPrompt = """
+                你是校园事务 Agent 的自我反思检查专家。
+                你的任务是检查初稿回答是否可靠、是否基于资料、是否存在幻觉风险。
+
+                检查标准：
+                1. 回答是否主要依据【资料】。
+                2. 是否出现资料中没有的学校政策、地点、时间、流程。
+                3. 如果资料不足，是否明确提醒用户查看原通知或咨询学院/教务处。
+                4. 是否给出了可执行的步骤或待办。
+                5. 来源是否足够支撑回答。
+
+                只返回 JSON，不要 Markdown，不要解释。
+
+                JSON 格式：
+                {
+                  "passed": true,
+                  "riskLevel": "LOW",
+                  "suggestion": "回答有来源支撑，风险较低",
+                  "revisedAnswer": ""
+                }
+
+                如果发现回答有明显幻觉或过度推断：
+                - passed 返回 false
+                - riskLevel 返回 MEDIUM 或 HIGH
+                - suggestion 写明问题
+                - revisedAnswer 给出更稳妥的修正版回答
+                """;
+
+            String userPrompt = """
+                【用户问题】
+                %s
+
+                【检索资料】
+                %s
+
+                【初稿回答】
+                %s
+                """.formatted(question, context, draftJson);
+
+            Map<String, Object> requestBody = Map.of(
+                    "model", aiLlmProperties.getModel(),
+                    "temperature", 0.1,
+                    "messages", List.of(
+                            Map.of("role", "system", "content", systemPrompt),
+                            Map.of("role", "user", "content", userPrompt)
+                    )
+            );
+
+            String body = objectMapper.writeValueAsString(requestBody);
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(aiLlmProperties.getBaseUrl()))
+                    .timeout(Duration.ofSeconds(40))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + aiLlmProperties.getApiKey())
+                    .POST(HttpRequest.BodyPublishers.ofString(body))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new RuntimeException("反思检查调用失败，状态码："
+                        + response.statusCode()
+                        + "，返回："
+                        + response.body());
+            }
+
+            JsonNode root = objectMapper.readTree(response.body());
+
+            String aiContent = root.path("choices")
+                    .get(0)
+                    .path("message")
+                    .path("content")
+                    .asText();
+
+            String json = extractJson(aiContent);
+
+            return objectMapper.readValue(json, CampusReflectionResult.class);
+        } catch (Exception e) {
+            throw new RuntimeException("自我反思检查失败：" + e.getMessage(), e);
+        }
+    }
     private String buildContext(List<CampusRagChunkDTO> chunks) {
         if (chunks == null || chunks.isEmpty()) {
             return "当前没有检索到相关资料。";
