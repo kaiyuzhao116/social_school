@@ -103,7 +103,8 @@
                     v-for="item in quickQuestions"
                     :key="item"
                     @click="fillQuestion(item)"
-                    class="text-left p-3 rounded-2xl bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 transition text-sm font-bold text-gray-700"
+                    :disabled="loading"
+                    class="text-left p-3 rounded-2xl bg-gray-50 hover:bg-indigo-50 hover:text-indigo-600 transition text-sm font-bold text-gray-700 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   {{ item }}
                 </button>
@@ -112,6 +113,7 @@
 
             <!-- 对话展示 -->
             <div class="p-5 space-y-4 min-h-[360px]">
+              <!-- 开场白 -->
               <div class="flex gap-3">
                 <div class="w-9 h-9 rounded-full bg-indigo-500 text-white flex items-center justify-center shrink-0">
                   <Bot class="w-5 h-5" />
@@ -128,139 +130,152 @@
                 </div>
               </div>
 
+              <!-- 多轮消息 -->
               <div
-                  v-if="demoAnswer"
-                  class="flex gap-3"
+                  v-for="message in chatMessages"
+                  :key="message.id"
+                  class="space-y-4"
               >
-                <div class="w-9 h-9 rounded-full bg-indigo-500 text-white flex items-center justify-center shrink-0">
-                  <Bot class="w-5 h-5" />
+                <!-- 用户问题 -->
+                <div
+                    v-if="message.role === 'user'"
+                    class="flex justify-end"
+                >
+                  <div class="max-w-[80%] bg-indigo-500 text-white rounded-2xl px-4 py-3 text-sm leading-7">
+                    {{ message.content }}
+                  </div>
                 </div>
 
-                <div class="flex-1">
-                  <!-- 回答主体 -->
-                  <div class="bg-indigo-50 rounded-2xl p-4 text-sm text-gray-800 leading-7">
-                    <div class="flex items-center justify-between gap-3 mb-2">
-                      <div class="font-black text-gray-900">
-                        {{ demoAnswer.title }}
+                <!-- Agent 回答 -->
+                <div
+                    v-else
+                    class="flex gap-3"
+                >
+                  <div class="w-9 h-9 rounded-full bg-indigo-500 text-white flex items-center justify-center shrink-0">
+                    <Bot class="w-5 h-5" />
+                  </div>
+
+                  <div class="flex-1">
+                    <!-- 回答主体 -->
+                    <div class="bg-indigo-50 rounded-2xl p-4 text-sm text-gray-800 leading-7">
+                      <div class="flex items-center justify-between gap-3 mb-2">
+                        <div class="font-black text-gray-900">
+                          校园事务 Agent 回答：
+                        </div>
+
+                        <div
+                            v-if="message.data.intent"
+                            class="text-[11px] px-2 py-1 rounded-full bg-white text-indigo-600 font-bold"
+                        >
+                          {{ formatIntent(message.data.intent) }}
+                        </div>
                       </div>
 
                       <div
-                          v-if="demoAnswer.intent"
-                          class="text-[11px] px-2 py-1 rounded-full bg-white text-indigo-600 font-bold"
+                          v-if="message.data.confidence !== null && message.data.confidence !== undefined"
+                          class="text-xs text-indigo-500 mb-2"
                       >
-                        {{ demoAnswer.intent }}
+                        置信度：{{ formatConfidence(message.data.confidence) }}
+                      </div>
+
+                      <div class="agent-answer-text">
+                        {{ message.data.answer }}
                       </div>
                     </div>
 
+                    <!-- 来源卡片，只展示前 3 条，避免页面过长 -->
                     <div
-                        v-if="demoAnswer.confidence !== null && demoAnswer.confidence !== undefined"
-                        class="text-xs text-indigo-500 mb-2"
+                        v-if="message.data.sources && message.data.sources.length"
+                        class="source-list"
                     >
-                      置信度：{{ formatConfidence(demoAnswer.confidence) }}
-                    </div>
+                      <div
+                          v-for="(source, index) in message.data.sources.slice(0, 3)"
+                          :key="`${source.title || 'source'}-${index}`"
+                          class="source-card"
+                      >
+                        <div class="source-title">
+                          {{ index + 1 }}. {{ source.title || '未命名资料' }}
+                        </div>
 
-                    <div class="agent-answer-text">
-                      {{ demoAnswer.answer }}
-                    </div>
-                  </div>
+                        <div class="source-meta">
+                          来源：{{ source.sourceName || '未知来源' }}
+                          <span v-if="source.sourceType"> / {{ source.sourceType }}</span>
+                          <span v-if="source.trustLevel"> / 可信度：{{ source.trustLevel }}</span>
+                        </div>
 
-                  <!-- 来源卡片 -->
-                  <div
-                      v-if="demoAnswer.sources && demoAnswer.sources.length"
-                      class="source-list"
-                  >
-                    <div
-                        v-for="(source, index) in displaySources"
-                        :key="`${source.title || 'source'}-${index}`"
-                        class="source-card"
-                    >
-                      <div class="source-title">
-                        {{ index + 1 }}. {{ source.title || '未命名资料' }}
+                        <a
+                            v-if="source.url"
+                            class="source-link"
+                            :href="source.url"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                          查看原通知
+                        </a>
                       </div>
+                    </div>
 
-                      <div class="source-meta">
-                        来源：{{ source.sourceName || '未知来源' }}
-                        <span v-if="source.sourceType"> / {{ source.sourceType }}</span>
-                        <span v-if="source.trustLevel"> / 可信度：{{ source.trustLevel }}</span>
+                    <!-- 待办建议 -->
+                    <div
+                        v-if="message.data.todos && message.data.todos.length"
+                        class="todo-suggestion"
+                    >
+                      <div class="todo-title">
+                        待办建议：
                       </div>
 
                       <div
-                          v-if="source.contentPreview"
-                          class="source-preview"
+                          v-for="(todo, index) in message.data.todos"
+                          :key="`${todo.title || 'todo'}-${index}`"
+                          class="todo-item"
                       >
-                        {{ source.contentPreview }}
+                        <input
+                            type="checkbox"
+                            :checked="todo.done"
+                            disabled
+                        />
+                        <span>{{ todo.title }}</span>
+                      </div>
+                    </div>
+
+                    <!-- Agent 执行过程 -->
+                    <div
+                        v-if="message.data.expertTrace && message.data.expertTrace.length"
+                        class="agent-trace-card"
+                    >
+                      <div class="trace-header">
+                        <span>Agent 执行过程</span>
+
+                        <span
+                            class="risk-badge"
+                            :class="getRiskBadgeClass(message.data.riskLevel)"
+                        >
+                          {{ message.data.riskLevel || 'LOW' }}
+                        </span>
                       </div>
 
-                      <a
-                          v-if="source.url"
-                          class="source-link"
-                          :href="source.url"
-                          target="_blank"
-                          rel="noopener noreferrer"
-                      >
-                        查看原通知
-                      </a>
-                    </div>
-                  </div>
-
-                  <!-- 待办建议 -->
-                  <div
-                      v-if="demoAnswer.todos && demoAnswer.todos.length"
-                      class="todo-suggestion"
-                  >
-                    <div class="todo-title">
-                      待办建议：
-                    </div>
-
-                    <div
-                        v-for="(todo, index) in demoAnswer.todos"
-                        :key="`${todo.title || 'todo'}-${index}`"
-                        class="todo-item"
-                    >
-                      <input
-                          type="checkbox"
-                          :checked="todo.done"
-                          disabled
-                      />
-                      <span>{{ todo.title }}</span>
-                    </div>
-                  </div>
-
-                  <!-- Agent 执行过程 -->
-                  <div
-                      v-if="hasAgentTrace"
-                      class="agent-trace-card"
-                  >
-                    <div class="trace-header">
-                      <span>Agent 执行过程</span>
-
-                      <span
-                          class="risk-badge"
-                          :class="riskBadgeClass"
-                      >
-                        {{ demoAnswer.riskLevel || 'LOW' }}
-                      </span>
-                    </div>
-
-                    <div
-                        v-if="demoAnswer.reflectionSuggestion"
-                        class="reflection-text"
-                    >
-                      反思结果：{{ demoAnswer.reflectionSuggestion }}
-                    </div>
-
-                    <div class="trace-list">
                       <div
-                          v-for="(trace, index) in demoAnswer.expertTrace"
-                          :key="`${trace}-${index}`"
-                          class="trace-item"
+                          v-if="message.data.reflectionSuggestion"
+                          class="reflection-text"
                       >
-                        {{ index + 1 }}. {{ trace }}
+                        反思结果：{{ message.data.reflectionSuggestion }}
+                      </div>
+
+                      <div class="trace-list">
+                        <div
+                            v-for="(trace, index) in message.data.expertTrace"
+                            :key="`${trace}-${index}`"
+                            class="trace-item"
+                        >
+                          {{ index + 1 }}. {{ formatTrace(trace) }}
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+
+              <div ref="chatEndRef"></div>
             </div>
 
             <!-- 输入区 -->
@@ -372,12 +387,14 @@ import {
   ShieldCheck,
   Sparkles
 } from 'lucide-vue-next'
-import { ref, computed } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { chatWithCampusAgent } from '@/api/campusAgent'
 
 const question = ref('')
 const demoAnswer = ref(null)
 const loading = ref(false)
+const chatMessages = ref([])
+const chatEndRef = ref(null)
 
 const sources = [
   {
@@ -441,34 +458,6 @@ const ideas = [
   '回答附带来源可信度',
   '展示 Agent 执行过程'
 ]
-const displaySources = computed(() => {
-  if (!demoAnswer.value?.sources?.length) {
-    return []
-  }
-
-  return demoAnswer.value.sources.slice(0, 3)
-})
-const hasAgentTrace = computed(() => {
-  return Boolean(
-      demoAnswer.value &&
-      demoAnswer.value.expertTrace &&
-      demoAnswer.value.expertTrace.length
-  )
-})
-
-const riskBadgeClass = computed(() => {
-  const risk = demoAnswer.value?.riskLevel || 'LOW'
-
-  if (risk === 'HIGH') {
-    return 'risk-high'
-  }
-
-  if (risk === 'MEDIUM') {
-    return 'risk-medium'
-  }
-
-  return 'risk-low'
-})
 
 const displayTodos = computed(() => {
   if (demoAnswer.value?.todos?.length) {
@@ -490,6 +479,42 @@ const displayDeadlines = computed(() => {
   return defaultDeadlines
 })
 
+const scrollToBottom = async () => {
+  await nextTick()
+  chatEndRef.value?.scrollIntoView({
+    behavior: 'smooth',
+    block: 'end'
+  })
+}
+
+const formatIntent = (intent) => {
+  const intentMap = {
+    NOTICE_QUERY: '通知查询',
+    SERVICE_GUIDE: '办事流程',
+    DEADLINE_QUERY: '时间截止',
+    RELATED_CHECK: '相关性判断',
+    NOTICE_SUMMARY: '通知总结',
+    GENERAL_QA: '通用问答',
+    ERROR: '请求异常'
+  }
+
+  return intentMap[intent] || intent || '未知意图'
+}
+
+const formatTrace = (trace) => {
+  if (!trace) {
+    return ''
+  }
+
+  return trace
+      .replaceAll('RouterExpert', '意图识别专家')
+      .replaceAll('KnowledgeExpert', '知识检索专家')
+      .replaceAll('NoticeExpert', '通知查询专家')
+      .replaceAll('ReflectionExpert', '反思校验专家')
+      .replaceAll('Orchestrator', '智能体编排器')
+      .replaceAll('MemoryService', '记忆服务')
+}
+
 const formatConfidence = (value) => {
   if (value === null || value === undefined || value === '') {
     return '未知'
@@ -500,6 +525,20 @@ const formatConfidence = (value) => {
   }
 
   return value
+}
+
+const getRiskBadgeClass = (riskLevel) => {
+  const risk = riskLevel || 'LOW'
+
+  if (risk === 'HIGH') {
+    return 'risk-high'
+  }
+
+  if (risk === 'MEDIUM') {
+    return 'risk-medium'
+  }
+
+  return 'risk-low'
 }
 
 const fillQuestion = (text) => {
@@ -524,21 +563,31 @@ const normalizeAgentData = (res) => {
 }
 
 const sendQuestion = async () => {
-  if (!question.value.trim()) {
+  const currentQuestion = question.value.trim()
+
+  if (!currentQuestion || loading.value) {
     return
   }
 
   loading.value = true
+  question.value = ''
+
+  chatMessages.value.push({
+    id: Date.now() + '-user',
+    role: 'user',
+    content: currentQuestion
+  })
+
+  await scrollToBottom()
 
   try {
     const res = await chatWithCampusAgent({
-      question: question.value
+      question: currentQuestion
     })
 
     const data = normalizeAgentData(res)
 
-    demoAnswer.value = {
-      title: '校园事务 Agent 回答：',
+    const answerData = {
       answer: data.answer || '暂时没有生成回答。',
       intent: data.intent,
       confidence: data.confidence,
@@ -550,11 +599,21 @@ const sendQuestion = async () => {
       reflectionSuggestion: data.reflectionSuggestion,
       expertTrace: data.expertTrace || []
     }
+
+    demoAnswer.value = {
+      title: '校园事务 Agent 回答：',
+      ...answerData
+    }
+
+    chatMessages.value.push({
+      id: Date.now() + '-assistant',
+      role: 'assistant',
+      data: answerData
+    })
   } catch (e) {
     console.error(e)
 
-    demoAnswer.value = {
-      title: '请求失败',
+    const errorData = {
       answer: '校园 Agent 暂时无法回答，请稍后再试。',
       intent: 'ERROR',
       confidence: null,
@@ -566,8 +625,20 @@ const sendQuestion = async () => {
       reflectionSuggestion: '接口请求失败',
       expertTrace: []
     }
+
+    demoAnswer.value = {
+      title: '请求失败',
+      ...errorData
+    }
+
+    chatMessages.value.push({
+      id: Date.now() + '-assistant-error',
+      role: 'assistant',
+      data: errorData
+    })
   } finally {
     loading.value = false
+    await scrollToBottom()
   }
 }
 </script>
@@ -588,37 +659,29 @@ const sendQuestion = async () => {
 }
 
 .source-card {
-  padding: 12px 14px;
+  padding: 10px 12px;
   border-radius: 14px;
   background: #ecfdf5;
   border: 1px solid #bbf7d0;
 }
 
 .source-title {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   color: #065f46;
-  margin-bottom: 6px;
-  line-height: 1.5;
+  margin-bottom: 5px;
+  line-height: 1.45;
 }
 
 .source-meta {
   font-size: 12px;
   color: #047857;
-  margin-bottom: 6px;
-}
-
-.source-preview {
-  font-size: 12px;
-  color: #4b5563;
-  line-height: 1.6;
-  max-height: 42px;
-  overflow: hidden;
+  margin-bottom: 4px;
 }
 
 .source-link {
   display: inline-block;
-  margin-top: 8px;
+  margin-top: 4px;
   font-size: 12px;
   color: #2563eb;
   text-decoration: none;

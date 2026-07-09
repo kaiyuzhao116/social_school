@@ -12,7 +12,7 @@ public class CampusAgentService {
 
     private final CampusAgentOrchestrator campusAgentOrchestrator;
 
-    public CampusAgentResponse chat(CampusAgentRequest request) {
-        return campusAgentOrchestrator.chat(request);
+    public CampusAgentResponse chat(CampusAgentRequest request, Long userId) {
+        return campusAgentOrchestrator.chat(request, userId);
     }
 }

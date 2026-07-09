@@ -32,7 +32,15 @@ public class CampusRouterExpert {
         }
 
         if (question.contains("和我有关")
+                || question.contains("跟我有关")
+                || question.contains("和我相关")
+                || question.contains("跟我相关")
+                || question.contains("相关吗")
+                || question.contains("有我相关")
+                || question.contains("有和我相关")
                 || question.contains("我需要")
+                || question.contains("我能参加")
+                || question.contains("适合我")
                 || question.contains("是否相关")) {
             return "RELATED_CHECK";
         }

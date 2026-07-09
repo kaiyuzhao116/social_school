@@ -11,7 +11,8 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-
+import com.campusconnect.security.UserPrincipal;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 @RestController
 @RequestMapping("/agent/campus")
 @RequiredArgsConstructor
@@ -84,8 +85,12 @@ public class CampusAgentController {
         return Result.success(campusRagService.retrieve(question, 5));
     }
     @PostMapping("/chat")
-    public Result<?> chat(@RequestBody CampusAgentRequest request) {
-        return Result.success(campusAgentService.chat(request));
+    public Result<?> chat(
+            @RequestBody CampusAgentRequest request,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        Long userId = principal == null ? 0L : principal.getId();
+        return Result.success(campusAgentService.chat(request, userId));
     }
     @DeleteMapping("/knowledge/reset-vector")
     public Result<?> resetVectorCollection() {
