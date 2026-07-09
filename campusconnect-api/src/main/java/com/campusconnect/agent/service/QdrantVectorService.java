@@ -195,4 +195,34 @@ public class QdrantVectorService {
             return false;
         }
     }
+    public void deleteCollection() {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(qdrantProperties.getUrl()
+                            + "/collections/"
+                            + qdrantProperties.getCollectionName()))
+                    .timeout(Duration.ofSeconds(30))
+                    .DELETE()
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(
+                    request,
+                    HttpResponse.BodyHandlers.ofString()
+            );
+
+            // collection 不存在时，Qdrant 可能返回 404，这里不算严重错误
+            if (response.statusCode() == 404) {
+                return;
+            }
+
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new RuntimeException("删除 Qdrant Collection 失败，状态码："
+                        + response.statusCode()
+                        + "，返回："
+                        + response.body());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("删除 Qdrant Collection 失败：" + e.getMessage(), e);
+        }
+    }
 }

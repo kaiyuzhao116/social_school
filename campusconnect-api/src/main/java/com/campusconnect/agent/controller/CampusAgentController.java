@@ -1,6 +1,7 @@
 package com.campusconnect.agent.controller;
 
 import com.campusconnect.agent.dto.CampusAgentRequest;
+import com.campusconnect.agent.dto.CampusCrawlRequest;
 import com.campusconnect.agent.dto.CampusKnowledgeImportRequest;
 import com.campusconnect.agent.service.*;
 import com.campusconnect.common.Result;
@@ -24,6 +25,9 @@ public class CampusAgentController {
     private final CampusRagService campusRagService;
 
     private final CampusAgentService campusAgentService;
+
+    private final CampusCrawlerService campusCrawlerService;
+
     @PostMapping("/embedding-test")
     public Result<?> embeddingTest(@RequestBody Map<String, String> body) {
         String text = body.get("text");
@@ -82,5 +86,14 @@ public class CampusAgentController {
     @PostMapping("/chat")
     public Result<?> chat(@RequestBody CampusAgentRequest request) {
         return Result.success(campusAgentService.chat(request));
+    }
+    @DeleteMapping("/knowledge/reset-vector")
+    public Result<?> resetVectorCollection() {
+        qdrantVectorService.deleteCollection();
+        return Result.success("Qdrant 校园知识库向量集合已清空");
+    }
+    @PostMapping("/crawler/import")
+    public Result<?> crawlAndImport(@RequestBody CampusCrawlRequest request) {
+        return Result.success(campusCrawlerService.crawlAndImport(request));
     }
 }
